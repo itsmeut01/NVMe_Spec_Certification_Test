@@ -1,0 +1,8 @@
+# NVMe Base Specification PDFs (proprietary, not for distribution)
+nvme_base_specs/
+
+# Test logs (generated at runtime)
+logs/
+
+# Claude Code session data
+.claude/
