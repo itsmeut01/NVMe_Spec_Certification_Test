@@ -11,7 +11,6 @@ NVMe SSDs claim compliance with the NVMe Base Specification, but there is no lig
 - **Do features actually work as specified?** A controller may accept a Set Features command and return success, but does it actually change behavior — does disabling the volatile write cache affect I/O, does a temperature threshold trigger a critical warning, does a format erase user data?
 - **Are cross-field relationships consistent?** (e.g., SMART temperature vs WCTEMP/CCTEMP, available spare vs threshold, capacity fields vs namespace sizes)
 - **Does the controller handle destructive operations safely?** Format, Sanitize, Namespace Management, Reservations, Controller/Subsystem Resets — do they complete without data corruption and leave the device in a usable state?
-- **Does the OS drive protection work?** Destructive tests must never touch the boot drive, even when run carelessly.
 
 This project solves these problems with a comprehensive, open-source test framework that validates NVMe devices against the spec using `nvme-cli` commands — from simple field-presence checks all the way to behavioral validation of features that modify device state.
 
