@@ -22,6 +22,7 @@ LOG_FILE=""
 LOG_DIR=""
 _LOG_SCRIPT_NAME=""
 _LOG_DEVICE=""
+declare -A _SAVED_FEATURES
 
 # --------------------------------------------------------------------------
 # Logging infrastructure
@@ -191,6 +192,274 @@ auto_detect_ctrl() {
 		exit 1
 	fi
 	echo "$first"
+}
+
+# --------------------------------------------------------------------------
+# Safe device checks (for destructive / mutating tests)
+# --------------------------------------------------------------------------
+
+_DESTRUCTIVE_ALLOWED=0
+
+is_os_drive() {
+	local dev="$1"
+	local ctrl_dev
+	if [[ "$dev" =~ ^/dev/nvme[0-9]+n[0-9]+$ ]]; then
+		ctrl_dev="${dev%n*}"
+	elif [[ "$dev" =~ ^/dev/nvme[0-9]+$ ]]; then
+		ctrl_dev="$dev"
+	else
+		return 1
+	fi
+
+	local ctrl_base
+	ctrl_base=$(basename "$ctrl_dev")
+
+	local root_src
+	root_src=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+	if [ -n "$root_src" ]; then
+		local root_real
+		root_real=$(readlink -f "$root_src" 2>/dev/null || echo "$root_src")
+		if echo "$root_real" | grep -q "$ctrl_base"; then
+			return 0
+		fi
+	fi
+
+	local boot_src
+	boot_src=$(findmnt -n -o SOURCE /boot 2>/dev/null || true)
+	if [ -n "$boot_src" ] && echo "$boot_src" | grep -q "$ctrl_base"; then
+		return 0
+	fi
+
+	local efi_src
+	efi_src=$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)
+	if [ -n "$efi_src" ] && echo "$efi_src" | grep -q "$ctrl_base"; then
+		return 0
+	fi
+
+	if lsblk -n -o MOUNTPOINTS "/dev/${ctrl_base}"* 2>/dev/null | grep -q "/"; then
+		return 0
+	fi
+
+	return 1
+}
+
+has_mounted_partitions() {
+	local dev="$1"
+	local ctrl_dev
+	if [[ "$dev" =~ ^/dev/nvme[0-9]+n[0-9]+$ ]]; then
+		ctrl_dev="${dev%n*}"
+	elif [[ "$dev" =~ ^/dev/nvme[0-9]+$ ]]; then
+		ctrl_dev="$dev"
+	else
+		return 1
+	fi
+
+	local mounts
+	mounts=$(lsblk -n -o MOUNTPOINTS "${ctrl_dev}"* 2>/dev/null | grep -v "^$" || true)
+	if [ -n "$mounts" ]; then
+		return 0
+	fi
+	return 1
+}
+
+safe_device_check() {
+	local dev="$1"
+	local allow_flag="${2:-}"
+
+	if [ "$allow_flag" = "--allow-destructive" ]; then
+		_DESTRUCTIVE_ALLOWED=1
+	fi
+
+	if is_os_drive "$dev"; then
+		echo -e "${RED}ERROR: ${dev} is the OS drive — destructive tests REFUSED.${RESET}" >&2
+		echo -e "  Root filesystem or /boot is on this controller." >&2
+		echo -e "  Use a different NVMe device that does not host the OS." >&2
+		exit 1
+	fi
+
+	if has_mounted_partitions "$dev"; then
+		echo -e "${YELLOW}WARNING: ${dev} has mounted partitions:${RESET}" >&2
+		local ctrl_dev
+		if [[ "$dev" =~ ^/dev/nvme[0-9]+n[0-9]+$ ]]; then
+			ctrl_dev="${dev%n*}"
+		else
+			ctrl_dev="$dev"
+		fi
+		lsblk -o NAME,SIZE,MOUNTPOINTS "${ctrl_dev}"* 2>/dev/null | head -20 >&2
+		echo "" >&2
+		if [ "$_DESTRUCTIVE_ALLOWED" -ne 1 ]; then
+			echo -e "${RED}REFUSED: Pass --allow-destructive to run on a device with mounted partitions.${RESET}" >&2
+			exit 1
+		fi
+		echo -e "${YELLOW}Proceeding anyway (--allow-destructive was passed).${RESET}" >&2
+	fi
+
+	if [ "$_DESTRUCTIVE_ALLOWED" -ne 1 ]; then
+		echo -e "${RED}ERROR: Destructive tests require --allow-destructive flag.${RESET}" >&2
+		echo -e "  This test suite will write to / modify ${dev}." >&2
+		echo -e "  Usage: $0 ${dev} --allow-destructive" >&2
+		exit 1
+	fi
+
+	echo -e "${GREEN}Safe device check passed:${RESET} ${dev} is not the OS drive."
+}
+
+auto_detect_safe_ctrl() {
+	local all_ctrls
+	all_ctrls=$(ls -1 /dev/nvme[0-9] 2>/dev/null)
+	if [ -z "$all_ctrls" ]; then
+		echo "ERROR: No NVMe controllers found in /dev/." >&2
+		exit 1
+	fi
+
+	local safe_dev=""
+	while IFS= read -r ctrl; do
+		if ! is_os_drive "$ctrl"; then
+			safe_dev="$ctrl"
+			break
+		fi
+	done <<< "$all_ctrls"
+
+	if [ -z "$safe_dev" ]; then
+		echo "ERROR: All NVMe controllers host the OS — no safe device for destructive tests." >&2
+		echo "  Controllers found:" >&2
+		while IFS= read -r ctrl; do
+			echo "    ${ctrl} (OS drive)" >&2
+		done <<< "$all_ctrls"
+		exit 1
+	fi
+
+	echo "$safe_dev"
+}
+
+list_nvme_devices() {
+	echo -e "${BOLD}NVMe devices:${RESET}"
+	local all_ctrls
+	all_ctrls=$(ls -1 /dev/nvme[0-9] 2>/dev/null || true)
+	if [ -z "$all_ctrls" ]; then
+		echo "  No NVMe controllers found."
+		return
+	fi
+	while IFS= read -r ctrl; do
+		local model serial
+		model=$(nvme id-ctrl "$ctrl" 2>/dev/null | grep "^mn " | sed 's/^mn.*: //' || echo "unknown")
+		serial=$(nvme id-ctrl "$ctrl" 2>/dev/null | grep "^sn " | sed 's/^sn.*: //' || echo "unknown")
+		if is_os_drive "$ctrl"; then
+			echo -e "  ${RED}[OS]${RESET}  ${ctrl}  ${model}  (${serial})"
+		elif has_mounted_partitions "$ctrl"; then
+			echo -e "  ${YELLOW}[MNT]${RESET} ${ctrl}  ${model}  (${serial})"
+		else
+			echo -e "  ${GREEN}[OK]${RESET}  ${ctrl}  ${model}  (${serial})"
+		fi
+	done <<< "$all_ctrls"
+}
+
+# --------------------------------------------------------------------------
+# Feature save / restore / set helpers (for set-feature tests)
+# --------------------------------------------------------------------------
+
+extract_feature_result() {
+	local output="$1"
+	local hex
+	hex=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*0x[0-9a-fA-F]+' | head -1 | grep -oiP '0x[0-9a-fA-F]+' || true)
+	if [ -n "$hex" ]; then echo "$hex"; return; fi
+	hex=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*[0-9a-fA-F]+' | head -1 | grep -oiP '[0-9a-fA-F]+$' || true)
+	if [ -n "$hex" ]; then echo "0x${hex}"; return; fi
+}
+
+save_feature() {
+	local fid="$1"
+	local ctrl_dev="$2"
+	local output
+	output=$(nvme get-feature "$ctrl_dev" -f "$fid" 2>&1) || true
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -n "$result" ]; then
+		_SAVED_FEATURES["$fid"]="$result"
+		echo "$result"
+	else
+		echo ""
+	fi
+}
+
+restore_feature() {
+	local fid="$1"
+	local ctrl_dev="$2"
+	local saved="${_SAVED_FEATURES[$fid]:-}"
+	if [ -z "$saved" ]; then
+		return 0
+	fi
+	local val=$((saved))
+	nvme set-feature "$ctrl_dev" -f "$fid" -v "$val" 2>&1 || true
+	unset '_SAVED_FEATURES[$fid]'
+}
+
+set_feature() {
+	local fid="$1"
+	local value="$2"
+	local ctrl_dev="$3"
+	local output
+	output=$(nvme set-feature "$ctrl_dev" -f "$fid" -v "$value" 2>&1) || true
+	echo "$output"
+}
+
+verify_feature() {
+	local fid="$1"
+	local expected="$2"
+	local ctrl_dev="$3"
+	local output
+	output=$(nvme get-feature "$ctrl_dev" -f "$fid" 2>&1) || true
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		return 1
+	fi
+	local got=$((result))
+	local want=$((expected))
+	[ "$got" -eq "$want" ]
+}
+
+# --------------------------------------------------------------------------
+# Write / read / verify pattern (for behavioral validation)
+# --------------------------------------------------------------------------
+
+write_read_verify() {
+	local ns_dev="$1"
+	local start_lba="${2:-0}"
+	local block_count="${3:-1}"
+	local block_size="${4:-512}"
+
+	local total_bytes=$((block_count * block_size))
+	local tmp_dir
+	tmp_dir=$(mktemp -d)
+	local write_file="${tmp_dir}/write_data"
+	local read_file="${tmp_dir}/read_data"
+	local rc=0
+
+	dd if=/dev/urandom of="$write_file" bs="$block_size" count="$block_count" 2>/dev/null
+
+	if ! nvme write "$ns_dev" --start-block="$start_lba" \
+		--block-count=$((block_count - 1)) --data-size="$total_bytes" \
+		--data="$write_file" 2>/dev/null; then
+		rc=1
+	fi
+
+	if [ "$rc" -eq 0 ]; then
+		if ! nvme read "$ns_dev" --start-block="$start_lba" \
+			--block-count=$((block_count - 1)) --data-size="$total_bytes" \
+			--data="$read_file" 2>/dev/null; then
+			rc=1
+		fi
+	fi
+
+	if [ "$rc" -eq 0 ]; then
+		if ! cmp -s "$write_file" "$read_file"; then
+			rc=1
+		fi
+	fi
+
+	rm -rf "$tmp_dir"
+	return $rc
 }
 
 # --------------------------------------------------------------------------
@@ -389,6 +658,71 @@ get_spec_ref() {
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 211" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.6" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.6" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		feature-set)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.25 (Set Features)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.27 (Set Features)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.21 (Set Features)" ;;
+				1.3) echo "NVMe Base Specification, Revision 1.3, Section 5.21" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		io-test)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7 (I/O Commands)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7 (I/O Commands)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6 (NVM Command Set)" ;;
+				1.3) echo "NVMe Base Specification, Revision 1.3, Section 6 (NVM Command Set)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}, Section 6" ;;
+			esac ;;
+		dst-functional)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.5 (Device Self-test)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.9 (Device Self-test)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.8 (Device Self-test)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		format)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.10 (Format NVM)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.14 (Format NVM)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.23 (Format NVM)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		sanitize)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.22 (Sanitize)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.24 (Sanitize)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.24 (Sanitize)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		ns-mgmt)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.21 (Namespace Management)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.23 (Namespace Management)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.20 (Namespace Management)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		reservation)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7.5-7.8 (Reservations)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7.2-7.5 (Reservations)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6.10-6.13 (Reservations)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		reset)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 3.7 (Resets)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 3.7 (Resets)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 7.3 (Resets)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		async-event)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.2 (Async Event Request)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.2 (Async Event Request)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.2 (Async Event Request)" ;;
 				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
 			esac ;;
 		*)

@@ -24,15 +24,21 @@ PASSED_SUITES=0
 FAILED_SUITES=0
 SUITE_RESULTS=()
 
+DESTRUCTIVE_MODE=0
+
 usage() {
-	echo "Usage: $0 [/dev/nvmeX | /dev/nvmeXnY]"
+	echo "Usage: $0 [/dev/nvmeX | /dev/nvmeXnY] [--destructive]"
 	echo ""
 	echo "Runs all NVMe certification test suites and produces a combined report."
 	echo "Requires root privileges and the nvme-cli package."
 	echo ""
 	echo "If no device is given, the first NVMe controller found is used."
 	echo ""
-	echo "Test suites:"
+	echo "Options:"
+	echo "  --destructive   Also run destructive/mutating suites (feature-set, I/O,"
+	echo "                  format, sanitize, ns-mgmt, reset). Requires a non-OS drive."
+	echo ""
+	echo "Read-only suites (always run):"
 	echo "  1.  Identify Controller      (nvme id-ctrl)"
 	echo "  2.  SMART / Health Log       (nvme smart-log)"
 	echo "  3.  Error Information Log    (nvme error-log)"
@@ -45,12 +51,36 @@ usage() {
 	echo "  10. Get Features             (nvme get-feature)"
 	echo "  11. NS ID Descriptors        (nvme ns-descs)"
 	echo "  12. Device Self-test Log     (nvme self-test-log)"
+	echo ""
+	echo "Non-destructive functional suites (always run):"
+	echo "  13. DST Functional           (nvme device-self-test)"
+	echo "  14. Async Event              (async event / error injection)"
+	echo ""
+	echo "Destructive suites (require --destructive):"
+	echo "  15. Feature Set              (nvme set-feature + behavioral validation)"
+	echo "  16. I/O Test                 (nvme write / read / compare)"
+	echo "  17. Format NVM               (nvme format)"
+	echo "  18. Sanitize                 (nvme sanitize)"
+	echo "  19. Namespace Management     (nvme create-ns / delete-ns)"
+	echo "  20. Reservation              (nvme resv-register / acquire / release)"
+	echo "  21. Reset                    (nvme reset / subsystem-reset)"
 }
 
-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-	usage
-	exit 0
-fi
+DEVICE_ARG=""
+for arg in "$@"; do
+	case "$arg" in
+		-h|--help)
+			usage
+			exit 0
+			;;
+		--destructive)
+			DESTRUCTIVE_MODE=1
+			;;
+		*)
+			DEVICE_ARG="$arg"
+			;;
+	esac
+done
 
 if [ "$(id -u)" -ne 0 ]; then
 	echo "ERROR: This script must be run as root." >&2
@@ -99,6 +129,7 @@ run_suite() {
 	local name="$1"
 	local script="$2"
 	local device="$3"
+	shift 3
 
 	TOTAL_SUITES=$((TOTAL_SUITES + 1))
 
@@ -108,7 +139,7 @@ run_suite() {
 	echo -e "${BOLD}>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>${RESET}"
 
 	local exit_code=0
-	"${SCRIPT_DIR}/${script}" "$device" || exit_code=$?
+	"${SCRIPT_DIR}/${script}" "$device" "$@" || exit_code=$?
 
 	if [ "$exit_code" -eq 0 ]; then
 		PASSED_SUITES=$((PASSED_SUITES + 1))
@@ -119,7 +150,7 @@ run_suite() {
 	fi
 }
 
-resolve_devices "${1:-}"
+resolve_devices "$DEVICE_ARG"
 
 TS_START=$(date '+%Y-%m-%d %H:%M:%S %Z')
 
@@ -130,6 +161,11 @@ echo -e "${BOLD}################################################################
 echo -e "  Controller:  ${CTRL_DEV}"
 if [ -n "$NS_DEV" ]; then
 	echo -e "  Namespace:   ${NS_DEV}"
+fi
+if [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
+	echo -e "  Mode:        ${RED}DESTRUCTIVE${RESET} (read-only + functional + destructive)"
+else
+	echo -e "  Mode:        Read-only + non-destructive functional"
 fi
 echo -e "  Started:     ${TS_START}"
 echo -e "  Hostname:    $(hostname)"
@@ -187,6 +223,60 @@ fi
 run_suite "Device Self-test Log" \
 	"nvme_self_test_log_test/nvme_self_test_log_verify.sh" "$CTRL_DEV"
 
+# --------------------------------------------------------------------------
+# Non-destructive functional suites (always run)
+# --------------------------------------------------------------------------
+
+run_suite "DST Functional" \
+	"nvme_dst_functional_test/nvme_dst_functional_verify.sh" "$CTRL_DEV"
+
+run_suite "Async Event" \
+	"nvme_async_event_test/nvme_async_event_verify.sh" "$CTRL_DEV"
+
+# --------------------------------------------------------------------------
+# Destructive suites (require --destructive flag)
+# --------------------------------------------------------------------------
+
+if [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
+	echo ""
+	echo -e "${BOLD}####################################################################${RESET}"
+	echo -e "${BOLD}#          Destructive / Functional Test Suites                    #${RESET}"
+	echo -e "${BOLD}####################################################################${RESET}"
+
+	if [ -n "$NS_DEV" ]; then
+		run_suite "Feature Set (Behavioral)" \
+			"nvme_feature_set_test/nvme_feature_set_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "I/O Test" \
+			"nvme_io_test/nvme_io_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Format NVM" \
+			"nvme_format_test/nvme_format_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Sanitize" \
+			"nvme_sanitize_test/nvme_sanitize_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Namespace Management" \
+			"nvme_ns_mgmt_test/nvme_ns_mgmt_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Reservation" \
+			"nvme_reservation_test/nvme_reservation_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Reset" \
+			"nvme_reset_test/nvme_reset_verify.sh" "$CTRL_DEV" --allow-destructive
+	else
+		echo ""
+		echo -e "  ${YELLOW}SKIP${RESET}  Destructive suites — no namespace device found for ${CTRL_DEV}"
+		for _suite_name in "Feature Set" "I/O Test" "Format NVM" "Sanitize" "Namespace Management" "Reservation" "Reset"; do
+			TOTAL_SUITES=$((TOTAL_SUITES + 1))
+			SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: %s — no namespace device" "$TOTAL_SUITES" "$_suite_name")")
+		done
+	fi
+else
+	echo ""
+	echo -e "  ${YELLOW}NOTE${RESET}  Destructive suites skipped (pass --destructive to run them)"
+fi
+
 TS_END=$(date '+%Y-%m-%d %H:%M:%S %Z')
 
 echo ""
@@ -206,7 +296,7 @@ echo -e "  Started: ${TS_START}"
 echo -e "  Ended:   ${TS_END}"
 echo -e "${BOLD}--------------------------------------------------------------------${RESET}"
 
-LOG_FILES=$(ls -1t "${SCRIPT_DIR}/logs/"*"$(echo "$CTRL_DEV" | sed 's|/dev/||')"* 2>/dev/null | head -12)
+LOG_FILES=$(ls -1t "${SCRIPT_DIR}/logs/"*"$(echo "$CTRL_DEV" | sed 's|/dev/||')"* 2>/dev/null | head -22)
 if [ -n "$LOG_FILES" ]; then
 	echo ""
 	echo -e "${BOLD}  Log files:${RESET}"
