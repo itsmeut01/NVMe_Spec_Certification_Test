@@ -725,6 +725,48 @@ get_spec_ref() {
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.2 (Async Event Request)" ;;
 				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
 			esac ;;
+		fw-mgmt)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.8/5.1.9 (FW Download/Commit)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.12/5.13 (FW Download/Commit)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.11/5.12 (FW Download/Commit)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		additional-io)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7 (Verify/Write Uncor/Copy)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7 (Verify/Write Uncor/Copy)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6.14/6.16 (Verify/Write Uncor)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}, Section 6" ;;
+			esac ;;
+		security-directives)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.6/5.1.7/5.1.23/5.1.24 (Directives/Security)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.10/5.11/5.25/5.26 (Directives/Security)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.8/5.9/5.22/5.23 (Directives/Security)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		additional-logs)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12 (Telemetry/Persistent Event/Log Pages)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16 (Log Pages)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14 (Log Pages)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		additional-id)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13 (Identify Variants)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17 (Identify Variants)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15 (Identify Variants)" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
+		advanced-admin)
+			case "$spec_rev" in
+				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.15/7.3-7.4 (Lockdown/IO Mgmt)" ;;
+				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.18/5.25 (Lockdown/Virt Mgmt)" ;;
+				1.4) echo "NVMe Base Specification, Revision 1.4" ;;
+				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
+			esac ;;
 		*)
 			echo "NVMe Base Specification, Revision ${spec_rev}" ;;
 	esac

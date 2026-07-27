@@ -56,14 +56,22 @@ usage() {
 	echo "  13. DST Functional           (nvme device-self-test)"
 	echo "  14. Async Event              (async event / error injection)"
 	echo ""
+	echo "Non-destructive suites (always run):"
+	echo "  15. Additional Logs          (telemetry / persistent-event / misc log pages)"
+	echo "  16. Additional Identify      (list-ctrl / list-subsys / nvm-id-ctrl / etc.)"
+	echo ""
 	echo "Destructive suites (require --destructive):"
-	echo "  15. Feature Set              (nvme set-feature + behavioral validation)"
-	echo "  16. I/O Test                 (nvme write / read / compare)"
-	echo "  17. Format NVM               (nvme format)"
-	echo "  18. Sanitize                 (nvme sanitize)"
-	echo "  19. Namespace Management     (nvme create-ns / delete-ns)"
-	echo "  20. Reservation              (nvme resv-register / acquire / release)"
-	echo "  21. Reset                    (nvme reset / subsystem-reset)"
+	echo "  17. Feature Set              (nvme set-feature + behavioral validation)"
+	echo "  18. I/O Test                 (nvme write / read / compare)"
+	echo "  19. Format NVM               (nvme format)"
+	echo "  20. Sanitize                 (nvme sanitize)"
+	echo "  21. Namespace Management     (nvme create-ns / delete-ns)"
+	echo "  22. Reservation              (nvme resv-register / acquire / release)"
+	echo "  23. Reset                    (nvme reset / subsystem-reset)"
+	echo "  24. Firmware Management      (nvme fw-commit / fw-download)"
+	echo "  25. Additional I/O           (nvme verify / write-uncor / copy / compare)"
+	echo "  26. Security & Directives    (nvme security-recv / dir-send / dir-receive)"
+	echo "  27. Advanced Admin           (nvme lockdown / io-mgmt / virt-mgmt)"
 }
 
 DEVICE_ARG=""
@@ -234,6 +242,23 @@ run_suite "Async Event" \
 	"nvme_async_event_test/nvme_async_event_verify.sh" "$CTRL_DEV"
 
 # --------------------------------------------------------------------------
+# Non-destructive suites — additional logs and identify variants (always run)
+# --------------------------------------------------------------------------
+
+run_suite "Additional Logs" \
+	"nvme_additional_logs_test/nvme_additional_logs_verify.sh" "$CTRL_DEV"
+
+if [ -n "$NS_DEV" ]; then
+	run_suite "Additional Identify" \
+		"nvme_additional_id_test/nvme_additional_id_verify.sh" "$NS_DEV"
+else
+	echo ""
+	echo -e "  ${YELLOW}SKIP${RESET}  Suite: Additional Identify — no namespace device found for ${CTRL_DEV}"
+	TOTAL_SUITES=$((TOTAL_SUITES + 1))
+	SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: Additional Identify — no namespace device" "$TOTAL_SUITES")")
+fi
+
+# --------------------------------------------------------------------------
 # Destructive suites (require --destructive flag)
 # --------------------------------------------------------------------------
 
@@ -264,10 +289,22 @@ if [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
 
 		run_suite "Reset" \
 			"nvme_reset_test/nvme_reset_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Firmware Management" \
+			"nvme_fw_mgmt_test/nvme_fw_mgmt_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Additional I/O" \
+			"nvme_additional_io_test/nvme_additional_io_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Security & Directives" \
+			"nvme_security_directives_test/nvme_security_directives_verify.sh" "$CTRL_DEV" --allow-destructive
+
+		run_suite "Advanced Admin" \
+			"nvme_advanced_admin_test/nvme_advanced_admin_verify.sh" "$CTRL_DEV" --allow-destructive
 	else
 		echo ""
 		echo -e "  ${YELLOW}SKIP${RESET}  Destructive suites — no namespace device found for ${CTRL_DEV}"
-		for _suite_name in "Feature Set" "I/O Test" "Format NVM" "Sanitize" "Namespace Management" "Reservation" "Reset"; do
+		for _suite_name in "Feature Set" "I/O Test" "Format NVM" "Sanitize" "Namespace Management" "Reservation" "Reset" "Firmware Management" "Additional I/O" "Security & Directives" "Advanced Admin"; do
 			TOTAL_SUITES=$((TOTAL_SUITES + 1))
 			SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: %s — no namespace device" "$TOTAL_SUITES" "$_suite_name")")
 		done
@@ -296,7 +333,7 @@ echo -e "  Started: ${TS_START}"
 echo -e "  Ended:   ${TS_END}"
 echo -e "${BOLD}--------------------------------------------------------------------${RESET}"
 
-LOG_FILES=$(ls -1t "${SCRIPT_DIR}/logs/"*"$(echo "$CTRL_DEV" | sed 's|/dev/||')"* 2>/dev/null | head -22)
+LOG_FILES=$(ls -1t "${SCRIPT_DIR}/logs/"*"$(echo "$CTRL_DEV" | sed 's|/dev/||')"* 2>/dev/null | head -30)
 if [ -n "$LOG_FILES" ]; then
 	echo ""
 	echo -e "${BOLD}  Log files:${RESET}"

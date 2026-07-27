@@ -24,7 +24,7 @@ CTRL_DEV=""
 
 test_start_short_dst() {
 	local output
-	output=$(nvme device-self-test "$CTRL_DEV" --st=1 2>&1) || true
+	output=$(nvme device-self-test "$CTRL_DEV" -s 1 2>&1) || true
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_fail "Start short self-test" "command returned error: $output"
 	else
@@ -89,11 +89,11 @@ test_short_result() {
 
 test_abort_dst() {
 	local start_output
-	start_output=$(nvme device-self-test "$CTRL_DEV" --st=1 2>&1) || true
+	start_output=$(nvme device-self-test "$CTRL_DEV" -s 1 2>&1) || true
 	sleep 1
 
 	local output
-	output=$(nvme device-self-test "$CTRL_DEV" --st=0xf 2>&1) || true
+	output=$(nvme device-self-test "$CTRL_DEV" -s 0xf 2>&1) || true
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_warn "Abort self-test" "command returned: $output"
 	else
@@ -104,7 +104,7 @@ test_abort_dst() {
 
 test_start_extended_dst() {
 	local output
-	output=$(nvme device-self-test "$CTRL_DEV" --st=2 2>&1) || true
+	output=$(nvme device-self-test "$CTRL_DEV" -s 2 2>&1) || true
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_fail "Start extended self-test" "command returned error: $output"
 	else
@@ -115,7 +115,7 @@ test_start_extended_dst() {
 test_abort_extended_immediately() {
 	sleep 2
 	local output
-	output=$(nvme device-self-test "$CTRL_DEV" --st=0xf 2>&1) || true
+	output=$(nvme device-self-test "$CTRL_DEV" -s 0xf 2>&1) || true
 	if echo "$output" | grep -qi "error\|invalid"; then
 		log_warn "Abort extended self-test" "command returned: $output"
 	else

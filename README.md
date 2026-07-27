@@ -16,16 +16,16 @@ This project solves these problems with a comprehensive, open-source test framew
 
 ## What This Suite Tests
 
-### Read-Only Validation (Suites 1-12)
-Verifies that every mandatory and optional field returned by `nvme-cli` commands matches the NVMe Base Specification for the device's reported version. Checks presence, valid ranges, bit-field correctness, and cross-field consistency. These tests never modify device state.
+### Read-Only Validation (Suites 1-12, 15-16)
+Verifies that every mandatory and optional field returned by `nvme-cli` commands matches the NVMe Base Specification for the device's reported version. Checks presence, valid ranges, bit-field correctness, and cross-field consistency. These tests never modify device state. Includes extended log pages (telemetry lifecycle, persistent event log, endurance/reservation/boot-partition logs) and all Identify variants (list-ctrl, list-subsys, primary-ctrl-caps, NVM command-set IDs, domains, NVM sets, UUID, LBA formats).
 
-### Functional / Behavioral Validation (Suites 13-21)
-Goes beyond readback — actually exercises NVMe features and verifies that the device **behaves** as the spec requires. Every set-feature test follows a strict **save → set → behavioral action → verify behavior → restore** pattern to ensure the device is left in its original state. Destructive suites require an explicit `--destructive` flag and refuse to run on the OS drive.
+### Functional / Behavioral Validation (Suites 13-14, 17-27)
+Goes beyond readback — actually exercises NVMe features and verifies that the device **behaves** as the spec requires. Every test that can follow the **save → change → action → verify behavior → restore** pattern does so. This includes set-feature cycling, I/O write+read+compare round-trips, firmware re-commit, directive enable/disable, lockdown lock/unlock, and telemetry generate/read cycles. Read-only tests are used only where no write counterpart exists (e.g., Identify structures). Destructive suites require an explicit `--destructive` flag and refuse to run on the OS drive.
 
 ## Features
 
-- **21 test suites** covering all major NVMe data structures, commands, and functional behaviors
-- **~308 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
+- **27 test suites** covering all major NVMe data structures, commands, and functional behaviors
+- **~375 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
 - **Version-aware testing** — automatically gates checks on the device's reported NVMe version (1.0 through 2.1)
 - **Dynamic spec references** — maps the device's NVMe version to the correct spec revision, section, and figure
 - **Safe device infrastructure** — OS drive detection via `findmnt`, `lsblk`, and LVM symlink resolution; destructive tests always refuse the boot drive
@@ -60,18 +60,24 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 |---|-------|---------|-------|-------------|
 | 13 | DST Functional | `nvme device-self-test` | 6 | Start/poll/verify short DST, abort DST, start extended, abort extended |
 | 14 | Async Event | `nvme get-feature`, `admin-passthru` | 4 | AERL check, temperature threshold event trigger, error log increment via invalid opcode, SMART consistency after error injection |
+| 15 | Additional Logs | `nvme telemetry-log`, `nvme persistent-event-log`, misc | 16 | Telemetry behavioral cycle (generate→verify→read), persistent event log lifecycle (establish→read→release), endurance, changed-ns, reservation-notif, FID-effects, LBA-status, predictable-lat, boot-part, endurance-event-agg |
+| 16 | Additional Identify | `nvme list-ctrl`, `nvme nvm-id-ctrl`, misc | 16 | list-ctrl, list-subsys, primary-ctrl-caps, list-secondary, id-uuid, nvm-id-ctrl, nvm-id-ns, cmdset-ind-id-ns, id-domain, id-iocs, id-nvmset, id-ns-granularity, id-ns-lba-format, list-endgrp, nvm-id-ns-lba-format |
 
 ### Destructive Suites (require `--destructive`)
 
 | # | Suite | Command | Tests | Description |
 |---|-------|---------|-------|-------------|
-| 15 | Feature Set (Behavioral) | `nvme set-feature` | 47 | VWC toggle + I/O, TMPTH + critical_warning, PM cycle all PS + I/O, ERR TLER, ARB + I/O, APST, HCTM, INTC + I/O, NQ + I/O |
-| 16 | I/O Test | `nvme write/read/compare` | 9 | Sequential + offset write+read, compare, write-zeroes, trim, flush, MDTS boundary, multi-namespace |
-| 17 | Format NVM | `nvme format` | 4 | Format current LBAF, user data erase (SES=1), alternate LBAF, post-format I/O |
-| 18 | Sanitize | `nvme sanitize` | 5 | Block erase, poll progress (600s), verify result, overwrite sanitize, post-sanitize I/O |
-| 19 | Namespace Management | `nvme create-ns/delete-ns` | 6 | Create NS, attach, I/O on new NS, detach, delete, verify original NS unaffected |
-| 20 | Reservation | `nvme resv-register/acquire` | 5 | Register key, acquire exclusive, report reservations, release, post-release I/O |
-| 21 | Reset | `nvme reset` | 4 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, subsystem reset |
+| 17 | Feature Set (Behavioral) | `nvme set-feature` | 47 | VWC toggle + I/O, TMPTH + critical_warning, PM cycle all PS + I/O, ERR TLER, ARB + I/O, APST, HCTM, INTC + I/O, NQ + I/O |
+| 18 | I/O Test | `nvme write/read/compare` | 9 | Sequential + offset write+read, compare, write-zeroes, trim, flush, MDTS boundary, multi-namespace |
+| 19 | Format NVM | `nvme format` | 4 | Format current LBAF, user data erase (SES=1), alternate LBAF, post-format I/O |
+| 20 | Sanitize | `nvme sanitize` | 5 | Block erase, poll progress (600s), verify result, overwrite sanitize, post-sanitize I/O |
+| 21 | Namespace Management | `nvme create-ns/delete-ns` | 6 | Create NS, attach, I/O on new NS, detach, delete, verify original NS unaffected |
+| 22 | Reservation | `nvme resv-register/acquire` | 5 | Register key, acquire exclusive, report reservations, release, post-release I/O |
+| 23 | Reset | `nvme reset` | 4 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, subsystem reset |
+| 24 | Firmware Management | `nvme fw-log`, `nvme fw-commit` | 8 | Read slot info, re-commit active slot (safe no-op), verify unchanged, slot revisions, error cases (slot 0, no-download), fw-download /dev/zero |
+| 25 | Additional I/O | `nvme verify`, `nvme write-uncor`, `nvme copy`, `nvme io-passthru` | 11 | Verify command, write-uncor+recovery, copy round-trip, get-lba-status, io-passthru write+read, compare match/mismatch |
+| 26 | Security & Directives | `nvme security-recv`, `nvme dir-send/dir-receive` | 10 | Security recv safe probe (SPC-4 discovery), directives enable/disable Streams cycle, admin passthru round-trip |
+| 27 | Advanced Admin | `nvme lockdown`, `nvme io-mgmt-recv/send`, `nvme virt-mgmt` | 7 | Lockdown lock/unlock Keep Alive cycle, I/O management recv/send (FDP), virt-mgmt query, capacity-mgmt probe |
 
 ## Prerequisites
 
@@ -89,10 +95,10 @@ sudo apt install nvme-cli       # Debian/Ubuntu
 ## Quick Start
 
 ```bash
-# Run read-only + non-destructive suites (suites 1-14)
+# Run read-only + non-destructive suites (suites 1-16)
 sudo ./run_all.sh /dev/nvme0
 
-# Run ALL suites including destructive tests (suites 1-21)
+# Run ALL suites including destructive tests (suites 1-27)
 sudo ./run_all.sh /dev/nvme0 --destructive
 
 # Auto-detect first NVMe controller
@@ -120,7 +126,7 @@ Detection uses `findmnt /`, `lsblk` mount-point scanning, and LVM symlink resolu
 
 ```
 NVMe_Spec_Certification_Test/
-├── run_all.sh                              # Master runner — 21 suites, --destructive flag
+├── run_all.sh                              # Master runner — 27 suites, --destructive flag
 ├── common/
 │   └── nvme_test_lib.sh                    # Shared library (logging, version checks, spec refs,
 │                                           #   safe device checks, feature save/restore, write_read_verify)
@@ -138,13 +144,19 @@ NVMe_Spec_Certification_Test/
 ├── nvme_self_test_log_test/                # Suite 12: Device Self-test Log
 ├── nvme_dst_functional_test/               # Suite 13: DST Functional
 ├── nvme_async_event_test/                  # Suite 14: Async Event
-├── nvme_feature_set_test/                  # Suite 15: Feature Set (Behavioral)
-├── nvme_io_test/                           # Suite 16: I/O Test
-├── nvme_format_test/                       # Suite 17: Format NVM
-├── nvme_sanitize_test/                     # Suite 18: Sanitize
-├── nvme_ns_mgmt_test/                      # Suite 19: Namespace Management
-├── nvme_reservation_test/                  # Suite 20: Reservation
-├── nvme_reset_test/                        # Suite 21: Reset
+├── nvme_additional_logs_test/              # Suite 15: Additional Logs (Behavioral + Read-Only)
+├── nvme_additional_id_test/                # Suite 16: Additional Identify (Read-Only)
+├── nvme_feature_set_test/                  # Suite 17: Feature Set (Behavioral)
+├── nvme_io_test/                           # Suite 18: I/O Test
+├── nvme_format_test/                       # Suite 19: Format NVM
+├── nvme_sanitize_test/                     # Suite 20: Sanitize
+├── nvme_ns_mgmt_test/                      # Suite 21: Namespace Management
+├── nvme_reservation_test/                  # Suite 22: Reservation
+├── nvme_reset_test/                        # Suite 23: Reset
+├── nvme_fw_mgmt_test/                      # Suite 24: Firmware Management (Behavioral)
+├── nvme_additional_io_test/                # Suite 25: Additional I/O (Behavioral)
+├── nvme_security_directives_test/          # Suite 26: Security & Directives (Behavioral)
+├── nvme_advanced_admin_test/               # Suite 27: Advanced Admin (Behavioral)
 ├── logs/                                   # Auto-generated test logs (not in repo)
 └── .gitignore
 ```
