@@ -32,6 +32,27 @@ smart_field_present() {
 	echo "$SMART_LOG" | grep -q "^${1}"
 }
 
+smart_get_temp_kelvin() {
+	local full_line
+	full_line=$(echo "$SMART_LOG" | grep "^temperature[[:space:]]" | head -1)
+	[ -z "$full_line" ] && return
+	local kelvin_val
+	kelvin_val=$(echo "$full_line" | grep -oP '\(\K\d+(?=\s*K)' | head -1)
+	if [ -n "$kelvin_val" ] && [ "$kelvin_val" -gt 0 ] 2>/dev/null; then
+		echo "$kelvin_val"
+		return
+	fi
+	local raw_val
+	raw_val=$(echo "$full_line" | awk '{print $3}' | sed 's/[^0-9]//g')
+	if [ -n "$raw_val" ] && [ "$raw_val" -gt 0 ] 2>/dev/null; then
+		if [ "$raw_val" -lt 200 ]; then
+			echo $((raw_val + 273))
+		else
+			echo "$raw_val"
+		fi
+	fi
+}
+
 # --------------------------------------------------------------------------
 # Test functions
 # --------------------------------------------------------------------------
@@ -53,29 +74,19 @@ test_critical_warning() {
 }
 
 test_temperature() {
-	local val
-	val=$(smart_get_field "temperature")
-	if [ -z "$val" ]; then
-		log_fail "temperature (Composite) is reported" "not present"
+	local temp_k
+	temp_k=$(smart_get_temp_kelvin)
+	if [ -z "$temp_k" ] || [ "$temp_k" -eq 0 ] 2>/dev/null; then
+		log_fail "temperature (Composite) is reported" "not present or zero"
 		return
 	fi
-	local temp_k
-	temp_k=$(echo "$val" | sed 's/[^0-9]//g')
-	if [ -z "$temp_k" ] || [ "$temp_k" -eq 0 ] 2>/dev/null; then
-		val=$(echo "$SMART_LOG" | grep "^temperature" | sed 's/^temperature *: *//')
-		temp_k=$(echo "$val" | grep -oP '\d+\s*K' | grep -oP '\d+' | head -1)
-	fi
-	if [ -n "$temp_k" ] && [ "$temp_k" -gt 0 ] 2>/dev/null; then
-		local celsius=$((temp_k - 273))
-		local wctemp
-		wctemp=$(get_id_ctrl_field "wctemp")
-		if [ -n "$wctemp" ] && [ "$wctemp" -gt 0 ] 2>/dev/null && [ "$temp_k" -ge "$wctemp" ]; then
-			log_pass "temperature (Composite) is reported (${temp_k}K / ${celsius}C) [WARNING: at or above WCTEMP=${wctemp}K]"
-		else
-			log_pass "temperature (Composite) is reported (${temp_k}K / ${celsius}C)"
-		fi
+	local celsius=$((temp_k - 273))
+	local wctemp
+	wctemp=$(get_id_ctrl_field "wctemp")
+	if [ -n "$wctemp" ] && [ "$wctemp" -gt 0 ] 2>/dev/null && [ "$temp_k" -ge "$wctemp" ]; then
+		log_pass "temperature (Composite) is reported (${temp_k}K / ${celsius}C) [WARNING: at or above WCTEMP=${wctemp}K]"
 	else
-		log_fail "temperature (Composite) is valid" "could not parse temperature value"
+		log_pass "temperature (Composite) is reported (${temp_k}K / ${celsius}C)"
 	fi
 }
 
@@ -340,21 +351,13 @@ test_spare_vs_threshold() {
 }
 
 test_temp_vs_wctemp() {
-	local temp_raw cw
-	temp_raw=$(smart_get_field "temperature")
+	local cw
 	cw=$(smart_get_field "critical_warning")
-	if [ -z "$temp_raw" ] || [ -z "$cw" ]; then
-		log_skip "Temperature vs WCTEMP cross-check" "fields not available"
-		return
-	fi
 	local temp_k
-	temp_k=$(echo "$temp_raw" | sed 's/[^0-9]//g')
-	if [ -z "$temp_k" ] || [ "$temp_k" -eq 0 ] 2>/dev/null; then
-		temp_k=$(echo "$SMART_LOG" | grep "^temperature" | sed 's/^temperature *: *//' | grep -oP '\d+\s*K' | grep -oP '\d+' | head -1)
-	fi
+	temp_k=$(smart_get_temp_kelvin)
 	local wctemp
 	wctemp=$(get_id_ctrl_field "wctemp")
-	if [ -z "$temp_k" ] || [ -z "$wctemp" ] || [ "$wctemp" -eq 0 ] 2>/dev/null; then
+	if [ -z "$temp_k" ] || [ -z "$wctemp" ] || [ "$wctemp" -eq 0 ] 2>/dev/null || [ -z "$cw" ]; then
 		log_skip "Temperature vs WCTEMP cross-check" "temperature or WCTEMP not available"
 		return
 	fi
@@ -372,17 +375,8 @@ test_temp_vs_wctemp() {
 }
 
 test_temperature_range() {
-	local temp_raw
-	temp_raw=$(smart_get_field "temperature")
-	if [ -z "$temp_raw" ]; then
-		log_skip "Temperature range check" "not available"
-		return
-	fi
 	local temp_k
-	temp_k=$(echo "$temp_raw" | sed 's/[^0-9]//g')
-	if [ -z "$temp_k" ] || [ "$temp_k" -eq 0 ] 2>/dev/null; then
-		temp_k=$(echo "$SMART_LOG" | grep "^temperature" | sed 's/^temperature *: *//' | grep -oP '\d+\s*K' | grep -oP '\d+' | head -1)
-	fi
+	temp_k=$(smart_get_temp_kelvin)
 	if [ -z "$temp_k" ]; then
 		log_skip "Temperature range check" "could not parse temperature"
 		return

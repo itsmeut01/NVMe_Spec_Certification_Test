@@ -44,10 +44,10 @@ detect_lbaf_info() {
 
 test_format_current_lbaf() {
 	local output
-	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" 2>&1) || true
-	log_cmd "Format NVM (current LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF}" "$output"
+	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" --force 2>&1) || true
+	log_cmd "Format NVM (current LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF} --force" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
-		log_fail "Format with current LBAF ${ORIGINAL_LBAF}" "error: $(echo "$output" | head -1)"
+		log_fail "Format with current LBAF ${ORIGINAL_LBAF}" "error: $(echo "$output" | grep -i 'error\|invalid\|fail\|status' | tail -1)"
 		return
 	fi
 
@@ -65,10 +65,10 @@ test_format_current_lbaf() {
 
 test_format_user_data_erase() {
 	local output
-	output=$(nvme format "$NS_DEV" --ses=1 -l "$ORIGINAL_LBAF" 2>&1) || true
-	log_cmd "Format NVM (SES=1, user data erase)" "nvme format ${NS_DEV} --ses=1 -l ${ORIGINAL_LBAF}" "$output"
+	output=$(nvme format "$NS_DEV" --ses=1 -l "$ORIGINAL_LBAF" --force 2>&1) || true
+	log_cmd "Format NVM (SES=1, user data erase)" "nvme format ${NS_DEV} --ses=1 -l ${ORIGINAL_LBAF} --force" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
-		log_warn "Format with user data erase (SES=1)" "error: $(echo "$output" | head -1)"
+		log_warn "Format with user data erase (SES=1)" "error: $(echo "$output" | grep -i 'error\|invalid\|fail\|status' | tail -1)"
 		return
 	fi
 
@@ -109,10 +109,10 @@ test_format_alternate_lbaf() {
 	fi
 
 	local output
-	output=$(nvme format "$NS_DEV" -l "$alt_lbaf" 2>&1) || true
-	log_cmd "Format NVM (alternate LBAF ${alt_lbaf})" "nvme format ${NS_DEV} -l ${alt_lbaf}" "$output"
+	output=$(nvme format "$NS_DEV" -l "$alt_lbaf" --force 2>&1) || true
+	log_cmd "Format NVM (alternate LBAF ${alt_lbaf})" "nvme format ${NS_DEV} -l ${alt_lbaf} --force" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
-		log_warn "Format with alternate LBAF ${alt_lbaf}" "$(echo "$output" | head -1)"
+		log_warn "Format with alternate LBAF ${alt_lbaf}" "$(echo "$output" | grep -i 'error\|invalid\|fail\|status' | tail -1)"
 		return
 	fi
 
@@ -133,8 +133,8 @@ test_format_alternate_lbaf() {
 		log_warn "Format with alternate LBAF" "flbas shows LBAF=${cur_lbaf} (expected ${alt_lbaf})"
 	fi
 
-	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" 2>&1) || true
-	log_cmd "Format NVM (restore original LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF}" "$output"
+	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" --force 2>&1) || true
+	log_cmd "Format NVM (restore original LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF} --force" "$output"
 	sleep 2
 }
 

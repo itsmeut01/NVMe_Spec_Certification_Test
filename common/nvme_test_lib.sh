@@ -390,7 +390,7 @@ restore_feature() {
 		return 0
 	fi
 	local val=$((saved))
-	nvme set-feature "$ctrl_dev" -f "$fid" -v "$val" 2>&1 || true
+	nvme set-feature "$ctrl_dev" -f "$fid" -V "$val" 2>&1 || true
 	unset '_SAVED_FEATURES[$fid]'
 }
 
@@ -399,7 +399,7 @@ set_feature() {
 	local value="$2"
 	local ctrl_dev="$3"
 	local output
-	output=$(nvme set-feature "$ctrl_dev" -f "$fid" -v "$value" 2>&1) || true
+	output=$(nvme set-feature "$ctrl_dev" -f "$fid" -V "$value" 2>&1) || true
 	echo "$output"
 }
 
