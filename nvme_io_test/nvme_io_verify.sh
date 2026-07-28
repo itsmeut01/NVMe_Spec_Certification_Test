@@ -74,6 +74,7 @@ test_compare() {
 	local output
 	output=$(nvme compare "$NS_DEV" --start-block=2 --block-count=0 \
 		--data-size="$BLOCK_SIZE" --data="$write_file" 2>&1) || true
+	log_cmd "Compare" "nvme compare ${NS_DEV} --start-block=2 --block-count=0 --data-size=${BLOCK_SIZE}" "$output"
 
 	rm -rf "$tmp_dir"
 
@@ -94,6 +95,7 @@ test_write_zeroes() {
 
 	local output
 	output=$(nvme write-zeroes "$NS_DEV" --start-block=4 --block-count=0 2>&1) || true
+	log_cmd "Write Zeroes" "nvme write-zeroes ${NS_DEV} --start-block=4 --block-count=0" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Write Zeroes" "command failed: $(echo "$output" | head -1)"
 		return
@@ -126,6 +128,7 @@ test_dsm_trim() {
 
 	local output
 	output=$(nvme dsm "$NS_DEV" --ad --slbs=8 --blocks=1 2>&1) || true
+	log_cmd "Dataset Management (Trim)" "nvme dsm ${NS_DEV} --ad --slbs=8 --blocks=1" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Dataset Management (Trim)" "command failed: $(echo "$output" | head -1)"
 	else
@@ -136,6 +139,7 @@ test_dsm_trim() {
 test_flush() {
 	local output
 	output=$(nvme flush "$NS_DEV" 2>&1) || true
+	log_cmd "Flush" "nvme flush ${NS_DEV}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Flush command" "flush returned error: $(echo "$output" | head -1)"
 	else
@@ -158,7 +162,20 @@ test_mdts_boundary() {
 	if [ -n "$mpsmin" ]; then
 		page_size=$((1 << (12 + mpsmin)))
 	fi
-	local max_bytes=$((page_size * (1 << mdts_int)))
+	local mdts_bytes=$((page_size * (1 << mdts_int)))
+
+	local ns_name
+	ns_name=$(basename "$NS_DEV")
+	local sysfs_max_kb
+	sysfs_max_kb=$(cat "/sys/block/${ns_name}/queue/max_hw_sectors_kb" 2>/dev/null || true)
+	local max_bytes="$mdts_bytes"
+	if [ -n "$sysfs_max_kb" ] && [ "$((sysfs_max_kb))" -gt 0 ]; then
+		local sysfs_max_bytes=$((sysfs_max_kb * 1024))
+		if [ "$sysfs_max_bytes" -lt "$mdts_bytes" ]; then
+			max_bytes="$sysfs_max_bytes"
+		fi
+	fi
+
 	local blocks=$((max_bytes / BLOCK_SIZE))
 
 	if [ "$blocks" -le 0 ] || [ "$blocks" -gt 65536 ]; then
@@ -200,6 +217,7 @@ test_exceed_mdts() {
 	local output
 	output=$(nvme write "$NS_DEV" --start-block=0 --block-count=$((over_blocks - 1)) \
 		--data-size="$over_size" --data="${tmp_dir}/over_data" 2>&1) || true
+	log_cmd "Write (exceed MDTS)" "nvme write ${NS_DEV} --start-block=0 --block-count=$((over_blocks - 1)) --data-size=${over_size}" "$output"
 	rm -rf "$tmp_dir"
 
 	if echo "$output" | grep -qi "error\|invalid\|exceed\|max\|status"; then

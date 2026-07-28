@@ -142,6 +142,13 @@ main() {
 		exit 0
 	fi
 
+	local nmic
+	nmic=$(echo "$ns_output" | grep "^nmic" | awk '{print $3}' || true)
+	if [ -n "$nmic" ] && [ "$(( nmic & 0x1 ))" -eq 0 ]; then
+		echo -e "${YELLOW}SKIP${RESET}  Namespace is private (NMIC bit 0=0) — reservations require shared namespace"
+		exit 0
+	fi
+
 	init_log "nvme_reservation_verify" "$CTRL_DEV"
 	log_cmd "Identify Controller (cached)" "nvme id-ctrl ${CTRL_DEV}" "$_ID_CTRL_CACHE"
 	log_cmd "Identify Namespace" "nvme id-ns ${NS_DEV}" "$ns_output"

@@ -399,6 +399,15 @@ test_io_passthru() {
 }
 
 test_compare_command() {
+	local oncs
+	oncs=$(get_id_ctrl_field "oncs")
+	local oncs_int=$((oncs))
+	local compare_bit=$(( oncs_int & 0x1 ))
+	if [ "$compare_bit" -eq 0 ]; then
+		log_skip "Compare command" "ONCS bit 0 = 0 (Compare not supported)"
+		return
+	fi
+
 	local test_lba=6144
 	if [ "$NSZE" -le 6144 ]; then
 		test_lba=$(( NSZE / 2 ))

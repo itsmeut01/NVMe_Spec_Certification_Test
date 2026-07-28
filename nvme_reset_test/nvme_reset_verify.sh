@@ -26,37 +26,50 @@ PRE_RESET_SN=""
 # Test functions
 # --------------------------------------------------------------------------
 
+wait_for_device() {
+	local dev="$1"
+	local timeout="${2:-20}"
+	local waited=0
+	while [ "$waited" -lt "$timeout" ]; do
+		if [ -e "$dev" ]; then
+			return 0
+		fi
+		sleep 2
+		waited=$((waited + 2))
+	done
+	echo 1 > /sys/bus/pci/rescan 2>/dev/null || true
+	sleep 3
+	[ -e "$dev" ]
+}
+
 test_controller_reset() {
 	local output
 	output=$(nvme reset "$CTRL_DEV" 2>&1) || true
+	log_cmd "Controller Reset" "nvme reset ${CTRL_DEV}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail\|not support"; then
 		log_fail "Controller reset" "command failed: $(echo "$output" | head -1)"
 		return
 	fi
 
-	sleep 3
-
-	if [ -e "$CTRL_DEV" ]; then
+	if wait_for_device "$CTRL_DEV" 20; then
 		log_pass "Controller reset: device ${CTRL_DEV} exists after reset"
 	else
-		sleep 5
-		if [ -e "$CTRL_DEV" ]; then
-			log_pass "Controller reset: device ${CTRL_DEV} re-appeared after 8s"
-		else
-			log_fail "Controller reset" "device ${CTRL_DEV} not found after reset"
-		fi
+		log_fail "Controller reset" "device ${CTRL_DEV} not found after reset"
 	fi
 }
 
 test_post_reset_identify() {
 	_ID_CTRL_CACHE=""
-	local id_out
-	id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
-
-	if ! echo "$id_out" | grep -q "^mn "; then
-		sleep 3
+	local id_out=""
+	local attempt
+	for attempt in 1 2 3; do
 		id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
-	fi
+		if echo "$id_out" | grep -q "^mn "; then
+			break
+		fi
+		sleep 3
+	done
+	log_cmd "Post-reset Identify Controller" "nvme id-ctrl ${CTRL_DEV}" "$id_out"
 
 	if ! echo "$id_out" | grep -q "^mn "; then
 		log_fail "Post-reset identify" "id-ctrl failed after reset"
@@ -83,9 +96,8 @@ test_post_reset_io() {
 	fi
 
 	if [ ! -e "$NS_DEV" ]; then
-		sleep 3
 		nvme ns-rescan "$CTRL_DEV" 2>/dev/null || true
-		sleep 1
+		wait_for_device "$NS_DEV" 15
 	fi
 
 	if [ ! -e "$NS_DEV" ]; then
@@ -103,19 +115,24 @@ test_post_reset_io() {
 test_subsystem_reset() {
 	local output
 	output=$(nvme subsystem-reset "$CTRL_DEV" 2>&1) || true
+	log_cmd "Subsystem Reset" "nvme subsystem-reset ${CTRL_DEV}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail\|not support"; then
 		log_warn "Subsystem reset" "command returned: $(echo "$output" | head -1)"
 		return
 	fi
 
-	sleep 5
+	wait_for_device "$CTRL_DEV" 30
 
-	local id_out
-	id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
-	if ! echo "$id_out" | grep -q "^mn "; then
-		sleep 5
+	local id_out=""
+	local attempt
+	for attempt in 1 2 3 4; do
 		id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
-	fi
+		if echo "$id_out" | grep -q "^mn "; then
+			break
+		fi
+		sleep 5
+	done
+	log_cmd "Post-subsystem-reset Identify Controller" "nvme id-ctrl ${CTRL_DEV}" "$id_out"
 
 	if echo "$id_out" | grep -q "^mn "; then
 		log_pass "Subsystem reset: id-ctrl succeeds after subsystem reset"

@@ -25,6 +25,7 @@ BLOCK_SIZE=512
 detect_lbaf_info() {
 	local ns_output
 	ns_output=$(nvme id-ns "$NS_DEV" 2>&1) || true
+	log_cmd "Identify Namespace (detect LBAF)" "nvme id-ns ${NS_DEV}" "$ns_output"
 	local flbas
 	flbas=$(echo "$ns_output" | grep "^flbas" | awk '{print $3}' || true)
 	if [ -n "$flbas" ]; then
@@ -44,6 +45,7 @@ detect_lbaf_info() {
 test_format_current_lbaf() {
 	local output
 	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" 2>&1) || true
+	log_cmd "Format NVM (current LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Format with current LBAF ${ORIGINAL_LBAF}" "error: $(echo "$output" | head -1)"
 		return
@@ -53,6 +55,7 @@ test_format_current_lbaf() {
 
 	local ns_check
 	ns_check=$(nvme id-ns "$NS_DEV" 2>&1) || true
+	log_cmd "Identify Namespace (post-format check)" "nvme id-ns ${NS_DEV}" "$ns_check"
 	if echo "$ns_check" | grep -q "^flbas"; then
 		log_pass "Format with current LBAF ${ORIGINAL_LBAF}: namespace accessible after format"
 	else
@@ -63,6 +66,7 @@ test_format_current_lbaf() {
 test_format_user_data_erase() {
 	local output
 	output=$(nvme format "$NS_DEV" --ses=1 -l "$ORIGINAL_LBAF" 2>&1) || true
+	log_cmd "Format NVM (SES=1, user data erase)" "nvme format ${NS_DEV} --ses=1 -l ${ORIGINAL_LBAF}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_warn "Format with user data erase (SES=1)" "error: $(echo "$output" | head -1)"
 		return
@@ -90,6 +94,7 @@ test_format_user_data_erase() {
 test_format_alternate_lbaf() {
 	local ns_output
 	ns_output=$(nvme id-ns "$NS_DEV" 2>&1) || true
+	log_cmd "Identify Namespace (check NLBAF)" "nvme id-ns ${NS_DEV}" "$ns_output"
 	local nlbaf
 	nlbaf=$(echo "$ns_output" | grep "^nlbaf" | awk '{print $3}' || true)
 
@@ -105,6 +110,7 @@ test_format_alternate_lbaf() {
 
 	local output
 	output=$(nvme format "$NS_DEV" -l "$alt_lbaf" 2>&1) || true
+	log_cmd "Format NVM (alternate LBAF ${alt_lbaf})" "nvme format ${NS_DEV} -l ${alt_lbaf}" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_warn "Format with alternate LBAF ${alt_lbaf}" "$(echo "$output" | head -1)"
 		return
@@ -113,6 +119,7 @@ test_format_alternate_lbaf() {
 	sleep 2
 
 	ns_output=$(nvme id-ns "$NS_DEV" 2>&1) || true
+	log_cmd "Identify Namespace (verify alternate LBAF)" "nvme id-ns ${NS_DEV}" "$ns_output"
 	local flbas
 	flbas=$(echo "$ns_output" | grep "^flbas" | awk '{print $3}' || true)
 	local cur_lbaf=0
@@ -127,6 +134,7 @@ test_format_alternate_lbaf() {
 	fi
 
 	output=$(nvme format "$NS_DEV" -l "$ORIGINAL_LBAF" 2>&1) || true
+	log_cmd "Format NVM (restore original LBAF ${ORIGINAL_LBAF})" "nvme format ${NS_DEV} -l ${ORIGINAL_LBAF}" "$output"
 	sleep 2
 }
 

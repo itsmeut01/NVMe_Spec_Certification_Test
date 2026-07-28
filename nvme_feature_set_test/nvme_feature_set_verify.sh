@@ -98,6 +98,7 @@ test_vwc_flush_succeeds() {
 	fi
 	local output
 	output=$(nvme flush "$NS_DEV" 2>&1) || true
+	log_cmd "VWC: Flush namespace" "nvme flush $NS_DEV" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "VWC: flush command" "flush returned error: $output"
 	else
@@ -139,6 +140,7 @@ test_tmpth_set_below_temp() {
 	fi
 	local smart_output
 	smart_output=$(nvme smart-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "TMPTH: SMART log for current temperature" "nvme smart-log $CTRL_DEV" "$smart_output"
 	local temp_raw
 	temp_raw=$(echo "$smart_output" | grep "^temperature" | awk '{print $3}' | tr -d ',' || true)
 	if [ -z "$temp_raw" ]; then
@@ -166,6 +168,7 @@ test_tmpth_critical_warning() {
 	sleep 1
 	local smart_output
 	smart_output=$(nvme smart-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "TMPTH: SMART log for critical_warning check" "nvme smart-log $CTRL_DEV" "$smart_output"
 	local cw
 	cw=$(echo "$smart_output" | grep "^critical_warning" | awk '{print $3}' || true)
 	if [ -z "$cw" ]; then
@@ -205,6 +208,7 @@ test_tmpth_critical_clears() {
 	sleep 1
 	local smart_output
 	smart_output=$(nvme smart-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "TMPTH: SMART log for critical_warning clear check" "nvme smart-log $CTRL_DEV" "$smart_output"
 	local cw
 	cw=$(echo "$smart_output" | grep "^critical_warning" | awk '{print $3}' || true)
 	if [ -z "$cw" ]; then
@@ -294,6 +298,7 @@ test_pm_cycle_all() {
 		set_feature "0x02" "$ps" "$CTRL_DEV" >/dev/null
 		local id_out
 		id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
+		log_cmd "PM: Identify Controller at PS ${ps}" "nvme id-ctrl $CTRL_DEV" "$id_out"
 		if echo "$id_out" | grep -q "^mn "; then
 			tested=$((tested + 1))
 		else
@@ -325,6 +330,7 @@ test_pm_responsive_deepest() {
 	sleep 1
 	local id_out
 	id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
+	log_cmd "PM: Identify Controller after deepest PS" "nvme id-ctrl $CTRL_DEV" "$id_out"
 	if echo "$id_out" | grep -q "^mn "; then
 		log_pass "PM: id-ctrl succeeds after setting deepest PS (${npss_int})"
 	else
@@ -443,6 +449,7 @@ test_arb_set_value() {
 	set_feature "0x01" "$new_val" "$CTRL_DEV" >/dev/null
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0x01" 2>&1) || true
+	log_cmd "ARB: Get Feature 0x01 readback" "nvme get-feature $CTRL_DEV -f 0x01" "$output"
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -n "$result" ]; then
@@ -527,6 +534,7 @@ test_apst_responsive() {
 	fi
 	local id_out
 	id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
+	log_cmd "APST: Identify Controller with APST enabled" "nvme id-ctrl $CTRL_DEV" "$id_out"
 	if echo "$id_out" | grep -q "^mn "; then
 		if [ -n "$NS_DEV" ] && write_read_verify "$NS_DEV" 0 1; then
 			log_pass "APST: id-ctrl + I/O write+read succeeded with APST enabled"
@@ -624,6 +632,7 @@ test_hctm_smart_temp() {
 	fi
 	local smart_output
 	smart_output=$(nvme smart-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "HCTM: SMART log for temperature under HCTM" "nvme smart-log $CTRL_DEV" "$smart_output"
 	local temp
 	temp=$(echo "$smart_output" | grep "^temperature" | awk '{print $3}' | tr -d ',' || true)
 	if [ -n "$temp" ]; then
@@ -698,6 +707,7 @@ test_intc_set_value() {
 	set_feature "0x08" "$new_val" "$CTRL_DEV" >/dev/null
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0x08" 2>&1) || true
+	log_cmd "INTC: Get Feature 0x08 readback" "nvme get-feature $CTRL_DEV -f 0x08" "$output"
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -n "$result" ]; then
@@ -759,6 +769,7 @@ test_nq_set_value() {
 	set_feature "0x07" "$new_val" "$CTRL_DEV" >/dev/null
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0x07" 2>&1) || true
+	log_cmd "NQ: Get Feature 0x07 readback" "nvme get-feature $CTRL_DEV -f 0x07" "$output"
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -n "$result" ]; then
@@ -796,6 +807,7 @@ test_nq_restore() {
 	restore_feature "0x07" "$CTRL_DEV"
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0x07" 2>&1) || true
+	log_cmd "NQ: Get Feature 0x07 restore readback" "nvme get-feature $CTRL_DEV -f 0x07" "$output"
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -n "$result" ]; then

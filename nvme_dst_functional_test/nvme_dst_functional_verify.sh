@@ -25,6 +25,7 @@ CTRL_DEV=""
 test_start_short_dst() {
 	local output
 	output=$(nvme device-self-test "$CTRL_DEV" -s 1 2>&1) || true
+	log_cmd "Start Short Self-test" "nvme device-self-test ${CTRL_DEV} -s 1" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_fail "Start short self-test" "command returned error: $output"
 	else
@@ -43,7 +44,7 @@ test_poll_short_completion() {
 		local current_op
 		current_op=$(echo "$st_log" | grep -i "Current.*Operation\|current_operation" | head -1 || true)
 
-		if echo "$current_op" | grep -qi "No.*self-test\|0x0\| 0 "; then
+		if echo "$current_op" | grep -qiP "No.*self-test|0x0|:\s*0\s*$"; then
 			completed=1
 			break
 		fi
@@ -67,33 +68,51 @@ test_poll_short_completion() {
 test_short_result() {
 	local st_log
 	st_log=$(nvme self-test-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "Self-test Log (short result)" "nvme self-test-log ${CTRL_DEV}" "$st_log"
 
 	local result_line
-	result_line=$(echo "$st_log" | grep -i "Self Test Result\|test_result\|Result" | head -1 || true)
+	result_line=$(echo "$st_log" | grep -i "Operation Result\|operation_result" | head -1 || true)
 
 	if [ -z "$result_line" ]; then
-		log_skip "Short self-test result" "could not parse result from self-test-log"
+		log_skip "Short self-test result" "could not parse Operation Result from self-test-log"
 		return
 	fi
 
-	if echo "$result_line" | grep -qi "completed.*no error\|success\| 0x0\| 0 "; then
-		log_pass "Short self-test result: completed without error"
-	elif echo "$result_line" | grep -qi "aborted\|0xf"; then
-		log_pass "Short self-test result: aborted (valid result code)"
-	else
-		local code
-		code=$(echo "$result_line" | grep -oiP '0x[0-9a-fA-F]+' | head -1 || echo "$result_line")
-		log_warn "Short self-test result" "result=$code (non-zero, may indicate device issue)"
+	local op_result
+	op_result=$(echo "$result_line" | grep -oP '0x[0-9a-fA-F]+' | head -1 || true)
+	if [ -z "$op_result" ]; then
+		op_result=$(echo "$result_line" | grep -oP ':\s*\K[0-9]+' | head -1 || true)
 	fi
+
+	if [ -z "$op_result" ]; then
+		log_skip "Short self-test result" "could not parse result value"
+		return
+	fi
+
+	local op_int=$((op_result))
+	case "$op_int" in
+		0)  log_pass "Short self-test result: completed without error (0x0)" ;;
+		1)  log_pass "Short self-test result: aborted by Device Self-test command (0x1)" ;;
+		2)  log_warn "Short self-test result" "aborted by Controller Level Reset (0x2)" ;;
+		3)  log_warn "Short self-test result" "aborted due to namespace removal (0x3)" ;;
+		4)  log_warn "Short self-test result" "aborted due to Format NVM command (0x4)" ;;
+		5)  log_fail "Short self-test result" "fatal or unknown test error (0x5)" ;;
+		6)  log_warn "Short self-test result" "completed with a failed segment (0x6)" ;;
+		7)  log_warn "Short self-test result" "completed with one or more failed segments (0x7)" ;;
+		15) log_skip "Short self-test result" "no self-test result entry (0xF)" ;;
+		*)  log_warn "Short self-test result" "unknown Operation Result=0x$(printf '%x' "$op_int")" ;;
+	esac
 }
 
 test_abort_dst() {
 	local start_output
 	start_output=$(nvme device-self-test "$CTRL_DEV" -s 1 2>&1) || true
+	log_cmd "Start Short (for abort)" "nvme device-self-test ${CTRL_DEV} -s 1" "$start_output"
 	sleep 1
 
 	local output
 	output=$(nvme device-self-test "$CTRL_DEV" -s 0xf 2>&1) || true
+	log_cmd "Abort Self-test" "nvme device-self-test ${CTRL_DEV} -s 0xf" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_warn "Abort self-test" "command returned: $output"
 	else
@@ -105,6 +124,7 @@ test_abort_dst() {
 test_start_extended_dst() {
 	local output
 	output=$(nvme device-self-test "$CTRL_DEV" -s 2 2>&1) || true
+	log_cmd "Start Extended Self-test" "nvme device-self-test ${CTRL_DEV} -s 2" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|not support"; then
 		log_fail "Start extended self-test" "command returned error: $output"
 	else
@@ -116,6 +136,7 @@ test_abort_extended_immediately() {
 	sleep 2
 	local output
 	output=$(nvme device-self-test "$CTRL_DEV" -s 0xf 2>&1) || true
+	log_cmd "Abort Extended Self-test" "nvme device-self-test ${CTRL_DEV} -s 0xf" "$output"
 	if echo "$output" | grep -qi "error\|invalid"; then
 		log_warn "Abort extended self-test" "command returned: $output"
 	else
@@ -125,12 +146,23 @@ test_abort_extended_immediately() {
 	sleep 2
 	local st_log
 	st_log=$(nvme self-test-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "Self-test Log (extended result)" "nvme self-test-log ${CTRL_DEV}" "$st_log"
 	local result_line
-	result_line=$(echo "$st_log" | grep -i "Self Test Result\|test_result\|Result" | head -1 || true)
-	if echo "$result_line" | grep -qi "aborted\|0x1\|0x2"; then
-		log_pass "Extended self-test result shows aborted status"
-	elif [ -n "$result_line" ]; then
-		log_pass "Extended self-test result available: $(echo "$result_line" | sed 's/.*: //')"
+	result_line=$(echo "$st_log" | grep -i "Operation Result\|operation_result" | head -1 || true)
+	local ext_result
+	ext_result=$(echo "$result_line" | grep -oP '0x[0-9a-fA-F]+' | head -1 || true)
+	if [ -z "$ext_result" ]; then
+		ext_result=$(echo "$result_line" | grep -oP ':\s*\K[0-9]+' | head -1 || true)
+	fi
+	if [ -n "$ext_result" ]; then
+		local ext_int=$((ext_result))
+		if [ "$ext_int" -eq 1 ]; then
+			log_pass "Extended self-test result: aborted by Device Self-test command (0x1)"
+		elif [ "$ext_int" -eq 0 ]; then
+			log_pass "Extended self-test result: completed without error (0x0)"
+		else
+			log_pass "Extended self-test result: Operation Result=0x$(printf '%x' "$ext_int")"
+		fi
 	fi
 }
 

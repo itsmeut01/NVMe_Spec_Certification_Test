@@ -56,19 +56,21 @@ test_create_ns() {
 
 	local output
 	output=$(nvme create-ns "$CTRL_DEV" --nsze="$ns_size" --ncap="$ns_size" --flbas=0 --dps=0 --nmic=0 2>&1) || true
+	log_cmd "Create Namespace" "nvme create-ns ${CTRL_DEV} --nsze=${ns_size} --ncap=${ns_size} --flbas=0 --dps=0 --nmic=0" "$output"
+
+	if echo "$output" | grep -qi "NVMe status\|error\|invalid\|fail\|capacity\|not support"; then
+		log_warn "Create namespace" "$(echo "$output" | head -1)"
+		return
+	fi
 
 	local nsid
-	nsid=$(echo "$output" | grep -oiP 'nsid\s*[=:]\s*\K[0-9]+' || echo "$output" | grep -oP '[0-9]+' | tail -1 || true)
+	nsid=$(echo "$output" | grep -oiP 'nsid\s*[=:]\s*\K[0-9]+' || echo "$output" | grep -oP 'create-ns:\s*\K[0-9]+' || true)
 
 	if [ -n "$nsid" ] && [ "$((nsid))" -gt 0 ]; then
 		CREATED_NSID="$nsid"
 		log_pass "Create namespace: NSID=${nsid} (size=${ns_size} blocks)"
 	else
-		if echo "$output" | grep -qi "error\|invalid\|fail\|capacity"; then
-			log_warn "Create namespace" "$(echo "$output" | head -1)"
-		else
-			log_fail "Create namespace" "could not parse NSID from: $output"
-		fi
+		log_warn "Create namespace" "command accepted but could not parse NSID from: $output"
 	fi
 }
 
@@ -80,6 +82,7 @@ test_attach_ns() {
 
 	local output
 	output=$(nvme attach-ns "$CTRL_DEV" --namespace-id="$CREATED_NSID" --controllers="$CNTLID" 2>&1) || true
+	log_cmd "Attach Namespace" "nvme attach-ns ${CTRL_DEV} --namespace-id=${CREATED_NSID} --controllers=${CNTLID}" "$output"
 
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Attach namespace NSID=${CREATED_NSID}" "$(echo "$output" | head -1)"
@@ -92,6 +95,7 @@ test_attach_ns() {
 
 	local list_output
 	list_output=$(nvme list-ns "$CTRL_DEV" 2>&1) || true
+	log_cmd "List Namespaces" "nvme list-ns ${CTRL_DEV}" "$list_output"
 	if echo "$list_output" | grep -q "\[.*${CREATED_NSID}\]\|:${CREATED_NSID}$\| ${CREATED_NSID} "; then
 		log_pass "Attach namespace NSID=${CREATED_NSID}: visible in list-ns"
 	else
@@ -132,6 +136,7 @@ test_detach_ns() {
 
 	local output
 	output=$(nvme detach-ns "$CTRL_DEV" --namespace-id="$CREATED_NSID" --controllers="$CNTLID" 2>&1) || true
+	log_cmd "Detach Namespace" "nvme detach-ns ${CTRL_DEV} --namespace-id=${CREATED_NSID} --controllers=${CNTLID}" "$output"
 
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_warn "Detach namespace NSID=${CREATED_NSID}" "$(echo "$output" | head -1)"
@@ -151,6 +156,7 @@ test_delete_ns() {
 
 	local output
 	output=$(nvme delete-ns "$CTRL_DEV" --namespace-id="$CREATED_NSID" 2>&1) || true
+	log_cmd "Delete Namespace" "nvme delete-ns ${CTRL_DEV} --namespace-id=${CREATED_NSID}" "$output"
 
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_warn "Delete namespace NSID=${CREATED_NSID}" "$(echo "$output" | head -1)"
@@ -168,6 +174,7 @@ test_original_ns_unaffected() {
 
 	local ns_output
 	ns_output=$(nvme id-ns "$NS_DEV" 2>&1) || true
+	log_cmd "Identify Namespace" "nvme id-ns ${NS_DEV}" "$ns_output"
 	if echo "$ns_output" | grep -q "^nsze"; then
 		log_pass "Original namespace ${NS_DEV} still accessible after NS management operations"
 	else

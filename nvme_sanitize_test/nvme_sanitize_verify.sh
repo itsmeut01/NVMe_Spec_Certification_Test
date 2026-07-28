@@ -155,6 +155,7 @@ test_block_erase() {
 
 	local output
 	output=$(nvme sanitize "$CTRL_DEV" --sanact=2 2>&1) || true
+	log_cmd "Block Erase Sanitize" "nvme sanitize ${CTRL_DEV} --sanact=2" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_fail "Block Erase sanitize" "command failed: $(echo "$output" | head -1)"
 	else
@@ -197,6 +198,7 @@ test_sanitize_result() {
 
 	local san_log
 	san_log=$(nvme sanitize-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "Sanitize Log (result check)" "nvme sanitize-log ${CTRL_DEV}" "$san_log"
 	local sstat_int
 	sstat_int=$(parse_sstat "$san_log")
 
@@ -226,6 +228,7 @@ test_overwrite_sanitize() {
 
 	local output
 	output=$(nvme sanitize "$CTRL_DEV" --sanact=3 --ovrpat=0x12345678 2>&1) || true
+	log_cmd "Overwrite Sanitize" "nvme sanitize ${CTRL_DEV} --sanact=3 --ovrpat=0x12345678" "$output"
 	if echo "$output" | grep -qi "error\|invalid\|fail"; then
 		log_warn "Overwrite sanitize" "command returned: $(echo "$output" | head -1)"
 		return
