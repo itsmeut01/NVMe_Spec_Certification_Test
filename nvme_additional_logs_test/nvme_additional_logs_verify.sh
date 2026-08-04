@@ -275,12 +275,37 @@ test_fid_support_effects_log() {
 	output=$(nvme fid-support-effects-log "$CTRL_DEV" 2>&1) || true
 	log_cmd "FID Support Effects Log" "nvme fid-support-effects-log ${CTRL_DEV}" "$output"
 
-	if echo "$output" | grep -qi "fid\|support\|effect"; then
-		log_pass "FID Support and Effects Log: per-FID entries present"
-	elif echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
 		log_skip "FID Support and Effects Log" "$(echo "$output" | head -1)"
+		return
+	fi
+
+	if [ -z "$output" ]; then
+		log_fail "FID Support and Effects Log" "empty output"
+		return
+	fi
+
+	local missing=""
+	local checked=0
+	local fid_01 fid_02 fid_04 fid_07 fid_0b
+	fid_01=$(echo "$output" | grep -ci "FID.*0x01\|FID.*01h\|Arbitration" || true)
+	fid_02=$(echo "$output" | grep -ci "FID.*0x02\|FID.*02h\|Power Management" || true)
+	fid_04=$(echo "$output" | grep -ci "FID.*0x04\|FID.*04h\|Temperature Threshold" || true)
+	fid_07=$(echo "$output" | grep -ci "FID.*0x07\|FID.*07h\|Number of Queues" || true)
+	fid_0b=$(echo "$output" | grep -ci "FID.*0x0[bB]\|FID.*0Bh\|Async.*Event.*Config" || true)
+
+	[ "$fid_01" -eq 0 ] && missing="${missing} 0x01(Arbitration)" && checked=$((checked + 1))
+	[ "$fid_02" -eq 0 ] && missing="${missing} 0x02(PM)" && checked=$((checked + 1))
+	[ "$fid_04" -eq 0 ] && missing="${missing} 0x04(TempThresh)" && checked=$((checked + 1))
+	[ "$fid_07" -eq 0 ] && missing="${missing} 0x07(NumQueues)" && checked=$((checked + 1))
+	[ "$fid_0b" -eq 0 ] && missing="${missing} 0x0B(AEC)" && checked=$((checked + 1))
+
+	if [ "$checked" -eq 0 ]; then
+		log_pass "FID Support and Effects Log: all 5 mandatory FIDs present (0x01,0x02,0x04,0x07,0x0B)"
+	elif [ "$checked" -le 2 ]; then
+		log_warn "FID Support Effects: missing mandatory FIDs" "${missing}"
 	else
-		log_pass "FID Support and Effects Log: command completed"
+		log_warn "FID Support Effects: output format may not match expected patterns" "checked 5 mandatory FIDs, ${checked} not found:${missing}"
 	fi
 }
 

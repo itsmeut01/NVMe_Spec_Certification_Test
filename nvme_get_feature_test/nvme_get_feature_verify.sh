@@ -265,6 +265,62 @@ test_hctm() {
 	fi
 }
 
+test_interrupt_vector_config() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x09" 2>&1) || true
+	log_cmd "Get Feature: Interrupt Vector Configuration (FID 0x09)" "nvme get-feature ${CTRL_DEV} -f 0x09" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Interrupt Vector Configuration (FID 0x09)" "not supported"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Interrupt Vector Configuration (FID 0x09)" "could not parse result"
+		return
+	fi
+	local feat_val=$((result))
+	local cd_bit=$(( (feat_val >> 16) & 0x1 ))
+	log_pass "Interrupt Vector Configuration: CD=${cd_bit} (coalescing disable for vector 0)"
+}
+
+test_async_event_config() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0b" 2>&1) || true
+	log_cmd "Get Feature: Async Event Configuration (FID 0x0B)" "nvme get-feature ${CTRL_DEV} -f 0x0b" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_fail "Async Event Configuration (FID 0x0B) must be supported" "could not read mandatory feature"
+		return
+	fi
+	local feat_val=$((result))
+	local smart_cw=$(( feat_val & 0xFF ))
+	local ns_attr=$(( (feat_val >> 8) & 0x1 ))
+	local fw_act=$(( (feat_val >> 9) & 0x1 ))
+	log_pass "Async Event Configuration: SMART/CW=0x$(printf '%02x' "$smart_cw") NS_Attr=${ns_attr} FW_Act=${fw_act}"
+}
+
+test_keep_alive_timer() {
+	local kas
+	kas=$(get_id_ctrl_field "kas")
+	if [ -z "$kas" ] || [ "$((kas))" -eq 0 ]; then
+		log_skip "Keep Alive Timer (FID 0x0F)" "KAS=0 (not supported)"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0f" 2>&1) || true
+	log_cmd "Get Feature: Keep Alive Timer (FID 0x0F)" "nvme get-feature ${CTRL_DEV} -f 0x0f" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Keep Alive Timer (FID 0x0F)" "could not read feature"
+		return
+	fi
+	local kato=$((result))
+	log_pass "Keep Alive Timer: KATO=${kato} ms (KAS granularity=${kas})"
+}
+
 test_feature_error_handling() {
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0xFF" 2>&1) || true
@@ -329,6 +385,12 @@ main() {
 	test_arbitration
 	test_auto_pst
 	test_hctm
+
+	echo ""
+	echo -e "${BOLD}--- Interrupt, AER Config & Keep Alive ---${RESET}"
+	test_interrupt_vector_config
+	test_async_event_config
+	test_keep_alive_timer
 
 	echo ""
 	echo -e "${BOLD}--- Error Handling ---${RESET}"

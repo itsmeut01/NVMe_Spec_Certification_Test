@@ -136,6 +136,64 @@ test_smart_after_error() {
 	fi
 }
 
+test_abort_command() {
+	local acl
+	acl=$(get_id_ctrl_field "acl")
+	if [ -n "$acl" ]; then
+		local acl_int=$((acl))
+		log_cmd "Abort Command Limit" "id-ctrl acl" "ACL=${acl_int} (max $((acl_int+1)) outstanding aborts)"
+	fi
+
+	local output
+	output=$(nvme admin-passthru "$CTRL_DEV" --opcode=0x08 --cdw10=0x00000000 2>&1) || true
+	log_cmd "Abort Command (CID=0, SQID=0)" "nvme admin-passthru --opcode=0x08 --cdw10=0" "$output"
+
+	local id_check
+	id_check=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
+	if echo "$id_check" | grep -q "^mn "; then
+		log_pass "Abort command: controller responded and remains operational"
+	else
+		log_fail "Abort command" "controller not responding after abort"
+	fi
+}
+
+test_abort_invalid_sqid() {
+	local output
+	output=$(nvme admin-passthru "$CTRL_DEV" --opcode=0x08 --cdw10=0xFFFF0000 2>&1) || true
+	log_cmd "Abort with invalid SQID=0xFFFF" "nvme admin-passthru --opcode=0x08 --cdw10=0xFFFF0000" "$output"
+
+	local id_check
+	id_check=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
+	if echo "$id_check" | grep -q "^mn "; then
+		log_pass "Abort invalid SQID: controller handled gracefully (no crash)"
+	else
+		log_fail "Abort invalid SQID" "controller not responding after abort with invalid SQID"
+	fi
+}
+
+test_aec_readable() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0b" 2>&1) || true
+	log_cmd "AEC Feature (FID 0x0B)" "nvme get-feature $CTRL_DEV -f 0x0b" "$output"
+
+	local result
+	result=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*0x[0-9a-fA-F]+' | head -1 | grep -oiP '0x[0-9a-fA-F]+' || true)
+	if [ -z "$result" ]; then
+		result=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*[0-9a-fA-F]+' | head -1 | grep -oiP '[0-9a-fA-F]+$' || true)
+		[ -n "$result" ] && result="0x${result}"
+	fi
+
+	if [ -n "$result" ]; then
+		local val=$((result))
+		local smart_cw=$(( val & 0xFF ))
+		local ns_attr=$(( (val >> 8) & 0x1 ))
+		local fw_act=$(( (val >> 9) & 0x1 ))
+		log_pass "AEC readable: SMART/CW=0x$(printf '%02x' "$smart_cw") NS_Attr=${ns_attr} FW_Act=${fw_act}"
+	else
+		log_fail "AEC (FID 0x0B) must be readable" "mandatory feature returned no result"
+	fi
+}
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
@@ -182,6 +240,15 @@ main() {
 	echo -e "${BOLD}--- Error Injection ---${RESET}"
 	test_error_log_increment
 	test_smart_after_error
+
+	echo ""
+	echo -e "${BOLD}--- Abort Command (Spec 5.1.1) ---${RESET}"
+	test_abort_command
+	test_abort_invalid_sqid
+
+	echo ""
+	echo -e "${BOLD}--- AER Configuration Check ---${RESET}"
+	test_aec_readable
 
 	print_summary
 

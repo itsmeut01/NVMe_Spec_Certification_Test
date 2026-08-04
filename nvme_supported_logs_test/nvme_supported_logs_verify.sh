@@ -63,6 +63,22 @@ test_fw_slot_log_listed() {
 	fi
 }
 
+test_changed_ns_list_log_listed() {
+	if echo "$SLOG_OUTPUT" | grep -qi "0x04\|Changed Namespace"; then
+		log_pass "LID 0x04 (Changed Namespace List Log) is listed as supported"
+	else
+		log_fail "LID 0x04 (Changed Namespace List Log) must be supported" "not found in supported-log-pages"
+	fi
+}
+
+test_cmd_effects_log_listed() {
+	if echo "$SLOG_OUTPUT" | grep -qi "0x05\|Command.*Effects\|Commands Supported"; then
+		log_pass "LID 0x05 (Commands Supported and Effects Log) is listed as supported"
+	else
+		log_fail "LID 0x05 (Commands Supported and Effects Log) must be supported" "not found in supported-log-pages"
+	fi
+}
+
 test_dst_log_if_supported() {
 	local oacs
 	oacs=$(get_id_ctrl_field "oacs")
@@ -168,6 +184,8 @@ main() {
 	test_error_info_log_listed
 	test_smart_health_log_listed
 	test_fw_slot_log_listed
+	test_changed_ns_list_log_listed
+	test_cmd_effects_log_listed
 
 	echo ""
 	echo -e "${BOLD}--- Conditional Log Pages ---${RESET}"
