@@ -36,53 +36,61 @@ OVERALL_FAILED_DEVICES=0
 DEVICE_SUMMARIES=()
 
 usage() {
-	echo "Usage: $0 [/dev/nvmeX | /dev/nvmeXnY | --all] [--destructive]"
-	echo ""
-	echo "Runs all NVMe certification test suites and produces a combined report."
-	echo "Requires root privileges and the nvme-cli package."
-	echo ""
-	echo "If no device is given, the first NVMe controller found is used."
-	echo ""
-	echo "Options:"
-	echo "  --all           Run tests on ALL detected NVMe controllers."
-	echo "                  OS drives are auto-detected and skipped."
-	echo "  --destructive   Also run destructive/mutating suites (feature-set, I/O,"
-	echo "                  format, sanitize, ns-mgmt, reset). Requires a non-OS drive."
-	echo ""
-	echo "Read-only suites (always run):"
-	echo "  1.  Identify Controller      (nvme id-ctrl)"
-	echo "  2.  SMART / Health Log       (nvme smart-log)"
-	echo "  3.  Error Information Log    (nvme error-log)"
-	echo "  4.  Firmware Slot Info Log   (nvme fw-log)"
-	echo "  5.  Identify Namespace       (nvme id-ns)"
-	echo "  6.  Power State Descriptors  (nvme id-ctrl ps)"
-	echo "  7.  Controller Registers     (nvme show-regs)"
-	echo "  8.  Supported Log Pages      (nvme supported-log-pages, 2.0+)"
-	echo "  9.  Commands Effects Log     (nvme effects-log)"
-	echo "  10. Get Features             (nvme get-feature)"
-	echo "  11. NS ID Descriptors        (nvme ns-descs)"
-	echo "  12. Device Self-test Log     (nvme self-test-log)"
-	echo ""
-	echo "Non-destructive functional suites (always run):"
-	echo "  13. DST Functional           (nvme device-self-test)"
-	echo "  14. Async Event              (async event / error injection)"
-	echo ""
-	echo "Non-destructive suites (always run):"
-	echo "  15. Additional Logs          (telemetry / persistent-event / misc log pages)"
-	echo "  16. Additional Identify      (list-ctrl / list-subsys / nvm-id-ctrl / etc.)"
-	echo ""
-	echo "Destructive suites (require --destructive):"
-	echo "  17. Feature Set              (nvme set-feature + behavioral validation)"
-	echo "  18. I/O Test                 (nvme write / read / compare)"
-	echo "  19. Format NVM               (nvme format)"
-	echo "  20. Sanitize                 (nvme sanitize)"
-	echo "  21. Namespace Management     (nvme create-ns / delete-ns)"
-	echo "  22. Reservation              (nvme resv-register / acquire / release)"
-	echo "  23. Reset                    (nvme reset / subsystem-reset)"
-	echo "  24. Firmware Management      (nvme fw-commit / fw-download)"
-	echo "  25. Additional I/O           (nvme verify / write-uncor / copy / compare)"
-	echo "  26. Security & Directives    (nvme security-recv / dir-send / dir-receive)"
-	echo "  27. Advanced Admin           (nvme lockdown / io-mgmt / virt-mgmt)"
+	cat <<'HELPTEXT'
+NVMe Certification Test Suite — Master Runner
+==============================================
+
+USAGE
+    sudo ./run_all.sh [DEVICE] [OPTIONS]
+
+ARGUMENTS
+    DEVICE              NVMe controller or namespace device path.
+                        Accepts /dev/nvmeX or /dev/nvmeXnY (namespace is
+                        resolved to its parent controller automatically).
+                        If omitted, the first NVMe controller is auto-detected.
+
+OPTIONS
+    --all               Test ALL detected NVMe controllers in sequence.
+                        OS drives are auto-detected and skipped.
+                        Cannot be combined with a specific device argument.
+    --destructive       Also run destructive suites (17-27) that modify device
+                        state (format, sanitize, reset, set-feature, etc.).
+                        Requires a non-OS NVMe device — the OS drive is always
+                        refused regardless of this flag.
+    -h, --help          Show this help message and exit.
+
+EXAMPLES
+    # Run read-only + non-destructive suites on /dev/nvme0
+    sudo ./run_all.sh /dev/nvme0
+
+    # Run ALL suites including destructive tests
+    sudo ./run_all.sh /dev/nvme0 --destructive
+
+    # Auto-detect the first NVMe controller (read-only suites only)
+    sudo ./run_all.sh
+
+    # Test every NVMe controller on the system
+    sudo ./run_all.sh --all
+
+    # Test every NVMe controller with destructive suites
+    sudo ./run_all.sh --all --destructive
+
+    # Pass a namespace path (controller is resolved automatically)
+    sudo ./run_all.sh /dev/nvme2n1 --destructive
+
+    # Run a single suite directly (each suite has its own --help)
+    sudo ./nvme_id_ctrl_test/nvme_id_ctrl_verify.sh /dev/nvme0
+    sudo ./nvme_io_test/nvme_io_verify.sh /dev/nvme0 --allow-destructive
+
+OUTPUT
+    Each test prints color-coded results: PASS (green), FAIL (red),
+    SKIP (yellow), WARN (yellow). Detailed logs are saved under logs/.
+
+OS DRIVE PROTECTION
+    Destructive suites detect and refuse the OS drive using findmnt,
+    lsblk mount-point scanning, and LVM symlink resolution. This
+    protection cannot be overridden.
+HELPTEXT
 }
 
 DEVICE_ARG=""
