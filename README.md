@@ -25,7 +25,7 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 ## Features
 
 - **27 test suites** covering all major NVMe data structures, commands, and functional behaviors
-- **~375 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
+- **~399 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
 - **Version-aware testing** — automatically gates checks on the device's reported NVMe version (1.0 through 2.1)
 - **Dynamic spec references** — maps the device's NVMe version to the correct spec revision, section, and figure
 - **Safe device infrastructure** — OS drive detection via `findmnt`, `lsblk`, and LVM symlink resolution; destructive tests always refuse the boot drive
@@ -47,10 +47,10 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 | 4 | Firmware Slot Info | `nvme fw-log` | ~9 | Firmware slot fields, active slot validation |
 | 5 | Identify Namespace | `nvme id-ns` | ~38 | Namespace fields, NSFEAT/MC/DPC/DPS/RESCAP/FPI/DLFEAT bit decode, LBA format validation |
 | 6 | Power State Descriptors | `nvme id-ctrl` (ps) | ~15 | Power state fields, idle/active vs max power, latency trend, APSTA consistency |
-| 7 | Controller Registers | `nvme show-regs` | 8 | CSTS.RDY, CSTS.CFS, CSTS.SHST, CC.EN, CAP.MQES, CAP.CSS, VS vs id-ctrl VER |
-| 8 | Supported Log Pages | `nvme supported-log-pages` | 7 | Mandatory LIDs (01h-03h), conditional DST/Effects logs (NVMe 2.0+) |
+| 7 | Controller Registers | `nvme show-regs` | 11 | CSTS.RDY, CSTS.CFS, CSTS.SHST, CC.EN, CAP.MQES, CAP.CSS, CAP.TO (timeout), CAP.CRMS (ready modes), CRTO (ready timeouts), VS vs id-ctrl VER |
+| 8 | Supported Log Pages | `nvme supported-log-pages` | 9 | Mandatory LIDs (01h-05h incl. Changed NS List, Commands Effects), conditional DST/Effects logs (NVMe 2.0+) |
 | 9 | Commands Effects Log | `nvme effects-log` | 10 | Mandatory admin commands (Identify, Get/Set Features, Abort), I/O commands (Read, Write, Flush) |
-| 10 | Get Features | `nvme get-feature` | 10 | Number of Queues, Volatile Write Cache, Power Management, Temperature Threshold, Arbitration, APST, HCTM |
+| 10 | Get Features | `nvme get-feature` | 13 | Number of Queues, Volatile Write Cache, Power Management, Temperature Threshold, Arbitration, APST, HCTM, Interrupt Vector Config (0x09), Async Event Config (0x0B), Keep Alive Timer (0x0F) |
 | 11 | NS ID Descriptors | `nvme ns-descs` | 7 | EUI-64, NGUID, UUID presence, at least one non-zero, CSI (2.0+), descriptor lengths |
 | 12 | Device Self-test Log | `nvme self-test-log` | 6 | Current operation, completed results, result codes, segment numbers, POH timestamps |
 
@@ -59,7 +59,7 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 | # | Suite | Command | Tests | Description |
 |---|-------|---------|-------|-------------|
 | 13 | DST Functional | `nvme device-self-test` | 6 | Start/poll/verify short DST, abort DST, start extended, abort extended |
-| 14 | Async Event | `nvme get-feature`, `admin-passthru` | 4 | AERL check, temperature threshold event trigger, error log increment via invalid opcode, SMART consistency after error injection |
+| 14 | Async Event | `nvme get-feature`, `admin-passthru` | 7 | AERL check, temperature threshold event trigger, error log increment via invalid opcode, SMART consistency after error injection, Abort command (opcode 0x08), Abort with invalid SQID, AEC feature readback |
 | 15 | Additional Logs | `nvme telemetry-log`, `nvme persistent-event-log`, misc | 16 | Telemetry behavioral cycle (generate→verify→read), persistent event log lifecycle (establish→read→release), endurance, changed-ns, reservation-notif, FID-effects, LBA-status, predictable-lat, boot-part, endurance-event-agg |
 | 16 | Additional Identify | `nvme list-ctrl`, `nvme nvm-id-ctrl`, misc | 16 | list-ctrl, list-subsys, primary-ctrl-caps, list-secondary, id-uuid, nvm-id-ctrl, nvm-id-ns, cmdset-ind-id-ns, id-domain, id-iocs, id-nvmset, id-ns-granularity, id-ns-lba-format, list-endgrp, nvm-id-ns-lba-format |
 
@@ -67,13 +67,13 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 
 | # | Suite | Command | Tests | Description |
 |---|-------|---------|-------|-------------|
-| 17 | Feature Set (Behavioral) | `nvme set-feature` | 47 | VWC toggle + I/O, TMPTH + critical_warning, PM cycle all PS + I/O, ERR TLER, ARB + I/O, APST, HCTM, INTC + I/O, NQ + I/O |
+| 17 | Feature Set (Behavioral) | `nvme set-feature` | 55 | VWC toggle + I/O, TMPTH + critical_warning, PM cycle all PS + I/O, ERR TLER, ARB + I/O, APST, HCTM, INTC + I/O, NQ + I/O, Async Event Config (0x0B) save/set/restore, Keep Alive Timer (0x0F) save/set/restore |
 | 18 | I/O Test | `nvme write/read/compare` | 9 | Sequential + offset write+read, compare, write-zeroes, trim, flush, MDTS boundary, multi-namespace |
 | 19 | Format NVM | `nvme format` | 4 | Format current LBAF, user data erase (SES=1), alternate LBAF, post-format I/O |
 | 20 | Sanitize | `nvme sanitize` | 5 | Block erase, poll progress (600s), verify result, overwrite sanitize, post-sanitize I/O |
 | 21 | Namespace Management | `nvme create-ns/delete-ns` | 6 | Create NS, attach, I/O on new NS, detach, delete, verify original NS unaffected |
 | 22 | Reservation | `nvme resv-register/acquire` | 5 | Register key, acquire exclusive, report reservations, release, post-release I/O |
-| 23 | Reset | `nvme reset` | 4 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, subsystem reset |
+| 23 | Reset | `nvme reset` | 7 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, post-reset register state (CSTS.RDY/CFS, CC.EN), post-reset feature persistence (FID 0x07), post-reset SMART, subsystem reset |
 | 24 | Firmware Management | `nvme fw-log`, `nvme fw-commit` | 8 | Read slot info, re-commit active slot (safe no-op), verify unchanged, slot revisions, error cases (slot 0, no-download), fw-download /dev/zero |
 | 25 | Additional I/O | `nvme verify`, `nvme write-uncor`, `nvme copy`, `nvme io-passthru` | 11 | Verify command, write-uncor+recovery, copy round-trip, get-lba-status, io-passthru write+read, compare match/mismatch |
 | 26 | Security & Directives | `nvme security-recv`, `nvme dir-send/dir-receive` | 10 | Security recv safe probe (SPC-4 discovery), directives enable/disable Streams cycle, admin passthru round-trip |
@@ -104,6 +104,10 @@ sudo ./run_all.sh /dev/nvme0 --destructive
 # Auto-detect first NVMe controller
 sudo ./run_all.sh
 
+# Test all NVMe controllers (auto-detects all drives, skips OS drive)
+sudo ./run_all.sh --all
+sudo ./run_all.sh --all --destructive
+
 # Run a single suite
 sudo ./nvme_id_ctrl_test/nvme_id_ctrl_verify.sh /dev/nvme0
 sudo ./nvme_feature_set_test/nvme_feature_set_verify.sh /dev/nvme0 --allow-destructive
@@ -126,7 +130,7 @@ Detection uses `findmnt /`, `lsblk` mount-point scanning, and LVM symlink resolu
 
 ```
 NVMe_Spec_Certification_Test/
-├── run_all.sh                              # Master runner — 27 suites, --destructive flag
+├── run_all.sh                              # Master runner — 27 suites, --destructive, --all flags
 ├── common/
 │   └── nvme_test_lib.sh                    # Shared library (logging, version checks, spec refs,
 │                                           #   safe device checks, feature save/restore, write_read_verify)
@@ -157,6 +161,9 @@ NVMe_Spec_Certification_Test/
 ├── nvme_additional_io_test/                # Suite 25: Additional I/O (Behavioral)
 ├── nvme_security_directives_test/          # Suite 26: Security & Directives (Behavioral)
 ├── nvme_advanced_admin_test/               # Suite 27: Advanced Admin (Behavioral)
+├── docs/                                   # RST test plan documentation (per-suite step-by-step)
+│   ├── index.rst                           #   Master index with toctree
+│   └── suite_01_id_ctrl.rst … suite_27_advanced_admin.rst
 ├── logs/                                   # Auto-generated test logs (not in repo)
 └── .gitignore
 ```
@@ -194,6 +201,25 @@ Each log includes:
 - Full command output captured from `nvme-cli`
 - Every test result with pass/fail/skip/warn status
 - Summary counts
+
+## Documentation
+
+The `docs/` directory contains RST (reStructuredText) test plan files for all 27 suites. Each file documents the sequential execution steps, NVMe commands issued, and pass/fail/skip criteria for every test.
+
+```
+docs/
+├── index.rst                    # Master index with table of contents
+├── suite_01_id_ctrl.rst         # Suite 1:  Identify Controller (45 tests)
+├── suite_02_smart_log.rst       # Suite 2:  SMART / Health Log (27 tests)
+├── ...
+└── suite_27_advanced_admin.rst  # Suite 27: Advanced Admin (7 tests)
+```
+
+Each RST file includes:
+- **Overview** — what the suite validates and its spec relevance
+- **Prerequisites** — root, nvme-cli, device, destructive flag requirements
+- **Test Steps** — every test in execution order with `:Command:`, `:Pass:`, `:Fail:`, `:Skip:` fields
+- **Result Codes** — KCIDB-compliant PASS/FAIL/SKIP/WARN definitions
 
 ## Shared Library
 
