@@ -164,6 +164,8 @@ NVMe_Spec_Certification_Test/
 ├── docs/                                   # RST test plan documentation (per-suite step-by-step)
 │   ├── index.rst                           #   Master index with toctree
 │   └── suite_01_id_ctrl.rst … suite_27_advanced_admin.rst
+├── LICENSES/
+│   └── GPL-3.0.txt                         # GNU General Public License v3.0
 ├── logs/                                   # Auto-generated test logs (not in repo)
 └── .gitignore
 ```
@@ -267,7 +269,9 @@ All NVMe field names and bit-field layouts are derived from the [nvme-cli](https
 
 ## License
 
-GPL-3.0+
+This project is licensed under the [GNU General Public License v3.0](LICENSES/GPL-3.0.txt).
+
+All source files include the SPDX header: `SPDX-License-Identifier: GPL-3.0+`
 
 ## Author
 
