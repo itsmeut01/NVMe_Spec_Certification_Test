@@ -132,7 +132,7 @@ Detection uses `findmnt /`, `lsblk` mount-point scanning, and LVM symlink resolu
 
 ```
 NVMe_Spec_Certification_Test/
-├── run_all.sh                              # Master runner — 27 suites, --destructive, --all flags
+├── run_all.sh                              # Master runner — 29 suites, --destructive, --all flags
 ├── common/
 │   └── nvme_test_lib.sh                    # Shared library (logging, version checks, spec refs,
 │                                           #   safe device checks, feature save/restore, write_read_verify)
@@ -163,9 +163,11 @@ NVMe_Spec_Certification_Test/
 ├── nvme_additional_io_test/                # Suite 25: Additional I/O (Behavioral)
 ├── nvme_security_directives_test/          # Suite 26: Security & Directives (Behavioral)
 ├── nvme_advanced_admin_test/               # Suite 27: Advanced Admin (Behavioral)
+├── nvme_zns_test/                          # Suite 28: ZNS Command Set
+├── nvme_kv_test/                           # Suite 29: KV Command Set
 ├── docs/                                   # RST test plan documentation (per-suite step-by-step)
 │   ├── index.rst                           #   Master index with toctree
-│   └── suite_01_id_ctrl.rst … suite_27_advanced_admin.rst
+│   └── suite_01_id_ctrl.rst … suite_29_kv.rst
 ├── LICENSES/
 │   └── GPL-3.0.txt                         # GNU General Public License v3.0
 ├── logs/                                   # Auto-generated test logs (not in repo)
@@ -208,7 +210,7 @@ Each log includes:
 
 ## Documentation
 
-The `docs/` directory contains RST (reStructuredText) test plan files for all 27 suites. Each file documents the sequential execution steps, NVMe commands issued, and pass/fail/skip criteria for every test.
+The `docs/` directory contains RST (reStructuredText) test plan files for all 29 suites. Each file documents the sequential execution steps, NVMe commands issued, and pass/fail/skip criteria for every test.
 
 ```
 docs/
@@ -216,7 +218,9 @@ docs/
 ├── suite_01_id_ctrl.rst         # Suite 1:  Identify Controller (65 tests)
 ├── suite_02_smart_log.rst       # Suite 2:  SMART / Health Log (30 tests)
 ├── ...
-└── suite_27_advanced_admin.rst  # Suite 27: Advanced Admin (7 tests)
+├── suite_27_advanced_admin.rst  # Suite 27: Advanced Admin (7 tests)
+├── suite_28_zns.rst             # Suite 28: ZNS Command Set (19 tests)
+└── suite_29_kv.rst              # Suite 29: KV Command Set (9 tests)
 ```
 
 Each RST file includes:
@@ -242,7 +246,7 @@ Each RST file includes:
 
 ## NVMe Spec Coverage
 
-Test output includes the exact spec revision, section, and figure number matched to the device's reported NVMe version. Supported spec revisions: 1.0, 1.1, 1.2, 1.3, 1.4, 2.0, 2.1.
+Test output includes the exact spec revision, section, and figure number matched to the device's reported NVMe version. Supported spec revisions: 1.0, 1.1, 1.2, 1.3, 1.4, 2.0, 2.1, 2.4. Command set specs: NVM CS 1.3, ZNS CS 1.5, KV CS 1.4. Transport specs: PCIe Transport 1.4.
 
 ## Development
 
