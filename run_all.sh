@@ -355,11 +355,21 @@ run_suites_for_device() {
 	if [ -n "$ns" ]; then
 		run_suite "Additional Identify" \
 			"nvme_additional_id_test/nvme_additional_id_verify.sh" "$ns"
+
+		run_suite "ZNS Command Set" \
+			"nvme_zns_test/nvme_zns_verify.sh" "$ns"
+
+		run_suite "KV Command Set" \
+			"nvme_kv_test/nvme_kv_verify.sh" "$ns"
 	else
 		echo ""
 		echo -e "  ${YELLOW}SKIP${RESET}  Suite: Additional Identify — no namespace device found for ${ctrl}"
 		TOTAL_SUITES=$((TOTAL_SUITES + 1))
 		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: Additional Identify — no namespace device" "$TOTAL_SUITES")")
+		TOTAL_SUITES=$((TOTAL_SUITES + 1))
+		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: ZNS Command Set — no namespace device" "$TOTAL_SUITES")")
+		TOTAL_SUITES=$((TOTAL_SUITES + 1))
+		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: KV Command Set — no namespace device" "$TOTAL_SUITES")")
 	fi
 
 	# ------------------------------------------------------------------

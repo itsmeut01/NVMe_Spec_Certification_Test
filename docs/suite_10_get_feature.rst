@@ -137,7 +137,61 @@ Test Steps
       :Pass: KATO value is reported
       :Skip: KAS = 0 (Keep Alive not supported), or feature could not be read
 
-7. **Error Handling**
+7. **NVM CS 1.3 Features (NVMe 2.0+)**
+
+   a. **test_perf_characteristics** -- Query FID 0x1C (Performance
+      Characteristics) from NVM Command Set Specification 1.3.
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x1c``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.0, or not supported by controller
+
+   b. **test_rate_limiting** -- Query FID 0x28 (Rate Limiting) from NVM
+      Command Set Specification 1.3.
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x28``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.0, or not supported by controller
+
+8. **NVMe 2.4 Power & Voltage Features**
+
+   a. **test_cdp** -- Query FID 0x22 (Configurable Device Personality).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x22``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+   b. **test_power_limit** -- Query FID 0x23 (Power Limit).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x23``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+   c. **test_power_threshold** -- Query FID 0x24 (Power Threshold).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x24``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+   d. **test_power_measurement** -- Query FID 0x25 (Power Measurement).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x25``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+   e. **test_voltage_threshold** -- Query FID 0x26 (Voltage Threshold).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x26``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+   f. **test_voltage_measurement** -- Query FID 0x27 (Voltage Measurement).
+
+      :Command: ``nvme get-feature /dev/nvmeX -f 0x27``
+      :Pass: Feature result is readable
+      :Skip: NVMe < 2.4, or not supported by controller
+
+9. **Error Handling**
 
    a. **test_feature_error_handling** -- Issue a Get Feature request with an
       unsupported FID (0xFF) and verify the controller handles it gracefully
@@ -146,7 +200,7 @@ Test Steps
       :Command: ``nvme get-feature /dev/nvmeX -f 0xFF``
       :Pass: Controller returns an error or empty output without crashing
 
-8. **Summary**
+10. **Summary**
 
    - Report total PASS / FAIL / SKIP / WARN counts
    - Exit with non-zero status if any FAIL

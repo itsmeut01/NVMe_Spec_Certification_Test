@@ -119,6 +119,74 @@ test_cmd_effects_if_supported() {
 	fi
 }
 
+test_endurance_group_log_if_supported() {
+	local ctratt
+	ctratt=$(get_id_ctrl_field "ctratt")
+	if [ -z "$ctratt" ]; then
+		log_skip "LID 0x09 (Endurance Group Information) check" "CTRATT not available"
+		return
+	fi
+	local ctratt_int=$((ctratt))
+	local eg_bit=$(( (ctratt_int >> 4) & 0x1 ))
+	if [ "$eg_bit" -eq 0 ]; then
+		log_skip "LID 0x09 (Endurance Group Information) check" "EG not supported (CTRATT bit 4=0)"
+		return
+	fi
+	if echo "$SLOG_OUTPUT" | grep -qi "0x09\|Endurance Group"; then
+		log_pass "LID 0x09 (Endurance Group Information Log) listed — consistent with CTRATT bit 4=1"
+	else
+		log_warn "LID 0x09 (Endurance Group Information Log) not listed" "CTRATT bit 4=1 but log not in supported-log-pages"
+	fi
+}
+
+test_power_measurement_log_if_24() {
+	if ! ver_at_least 2 4; then
+		log_skip "LID 0x17 (Power Measurement) check" "requires NVMe 2.4+"
+		return
+	fi
+	if echo "$SLOG_OUTPUT" | grep -qi "0x17\|Power Measurement"; then
+		log_pass "LID 0x17 (Power Measurement Log) is listed — NVMe 2.4 feature"
+	else
+		log_skip "LID 0x17 (Power Measurement Log) not listed" "optional NVMe 2.4 log page"
+	fi
+}
+
+test_voltage_measurement_log_if_24() {
+	if ! ver_at_least 2 4; then
+		log_skip "LID 0x18 (Voltage Measurement) check" "requires NVMe 2.4+"
+		return
+	fi
+	if echo "$SLOG_OUTPUT" | grep -qi "0x18\|Voltage Measurement"; then
+		log_pass "LID 0x18 (Voltage Measurement Log) is listed — NVMe 2.4 feature"
+	else
+		log_skip "LID 0x18 (Voltage Measurement Log) not listed" "optional NVMe 2.4 log page"
+	fi
+}
+
+test_eom_log_if_pcie_transport() {
+	if ! ver_at_least 2 0; then
+		log_skip "LID 0x19 (EOM) check" "requires NVMe 2.0+"
+		return
+	fi
+	if echo "$SLOG_OUTPUT" | grep -qi "0x19\|Eye Opening\|EOM"; then
+		log_pass "LID 0x19 (Eye Opening Measurement Log) is listed — PCIe Transport 1.4 feature"
+	else
+		log_skip "LID 0x19 (Eye Opening Measurement Log) not listed" "optional PCIe Transport log page"
+	fi
+}
+
+test_rate_limiting_log_if_nvm_cs() {
+	if ! ver_at_least 2 0; then
+		log_skip "LID 0x28 (Rate Limiting) check" "requires NVMe 2.0+"
+		return
+	fi
+	if echo "$SLOG_OUTPUT" | grep -qi "0x28\|Rate Limiting"; then
+		log_pass "LID 0x28 (Rate Limiting Log) is listed — NVM CS 1.3 feature"
+	else
+		log_skip "LID 0x28 (Rate Limiting Log) not listed" "optional NVM CS 1.3 log page"
+	fi
+}
+
 test_supported_logs_summary() {
 	local total_count
 	total_count=$(echo "$SLOG_OUTPUT" | grep -ci "0x[0-9a-fA-F]" || true)
@@ -191,6 +259,17 @@ main() {
 	echo -e "${BOLD}--- Conditional Log Pages ---${RESET}"
 	test_dst_log_if_supported
 	test_cmd_effects_if_supported
+	test_endurance_group_log_if_supported
+
+	echo ""
+	echo -e "${BOLD}--- NVM CS 1.3 / PCIe Transport 1.4 Log Pages ---${RESET}"
+	test_rate_limiting_log_if_nvm_cs
+	test_eom_log_if_pcie_transport
+
+	echo ""
+	echo -e "${BOLD}--- NVMe 2.4 Log Pages ---${RESET}"
+	test_power_measurement_log_if_24
+	test_voltage_measurement_log_if_24
 
 	echo ""
 	echo -e "${BOLD}--- Summary ---${RESET}"

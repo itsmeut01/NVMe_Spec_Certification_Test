@@ -77,19 +77,36 @@ Test Steps
       :Pass: UUID entries with valid format found, or command completed
       :Skip: requires NVMe 1.4+, or controller returns not-supported/invalid
 
-   b. **test_nvm_id_ctrl** -- read the NVM Command Set specific Identify Controller data.
+   b. **test_nvm_id_ctrl** -- read the NVM Command Set specific Identify Controller data
+      and validate key fields (VSL, WZSL, WUSL, DMRL, DMRSL, DMSL).
 
       :Command: ``nvme nvm-id-ctrl /dev/nvmeX``
-      :Pass: key fields (VSL, WZSL, WUSL, DMRL, DMRSL) present, or command completed
+      :Pass: 3+ key fields present, or command completed
       :Skip: requires NVMe 2.0+, or controller returns not-supported/invalid
 
-   c. **test_nvm_id_ns** -- read the NVM Command Set specific Identify Namespace data.
+   c. **test_nvm_id_ctrl_ver** -- extract and decode the NVM CS version field.
+
+      :Pass: NVM CS version parsed (e.g. 1.3)
+      :Skip: requires NVMe 2.0+, or nvm-id-ctrl not available
+
+   d. **test_nvm_id_ctrl_kpiocap** -- decode kpiocap (Key Protection Information
+      I/O Command Capabilities), including 64-bit Guard PI (CRC-64) support bit.
+
+      :Pass: kpiocap decoded and reported
+      :Skip: requires NVMe 2.0+, or field not found
+
+   e. **test_nvm_id_ctrl_copy_fields** -- validate Copy command limits (DMRL, DMRSL, DMSL).
+
+      :Pass: Copy command limits reported
+      :Skip: requires NVMe 2.0+, or fields not found
+
+   f. **test_nvm_id_ns** -- read the NVM Command Set specific Identify Namespace data.
 
       :Command: ``nvme nvm-id-ns /dev/nvmeXnY``
-      :Pass: key fields (LBSTM, ELBAF, PID) present, or command completed
+      :Pass: NVM CS fields (LBSTM, ELBAF, PIC, PID) present, or command completed
       :Skip: requires NVMe 2.0+, no namespace device, or controller returns not-supported/invalid
 
-   d. **test_cmdset_ind_id_ns** -- read the Command Set Independent Identify Namespace data.
+   g. **test_cmdset_ind_id_ns** -- read the Command Set Independent Identify Namespace data.
 
       :Command: ``nvme cmdset-ind-id-ns /dev/nvmeXnY``
       :Pass: command completed

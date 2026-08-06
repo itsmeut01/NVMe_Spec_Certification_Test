@@ -11,13 +11,15 @@ the NVMe commands issued, and the pass/fail criteria for every check.
 Overview
 --------
 
-The NVMe Certification Test Suite contains **27 test suites** with **~399 individual tests**
-that validate NVMe devices against the NVMe Base Specification (versions 1.0 through 2.1).
+The NVMe Certification Test Suite contains **29 test suites** with **~456 individual tests**
+that validate NVMe devices against the NVMe specification family (Base 2.4, NVM CS 1.3,
+ZNS CS 1.5, KV CS 1.4, PCIe Transport 1.4), with version-gated coverage from 1.0 through 2.4.
 
-Tests are organized into three categories:
+Tests are organized into four categories:
 
 - **Read-Only** (Suites 1-12): Never modify device state. Safe to run on any drive.
 - **Non-Destructive Functional** (Suites 13-16): May trigger events but do not erase data.
+- **Command Set Specific** (Suites 28-29): ZNS and KV namespace tests, auto-skip if not applicable.
 - **Destructive** (Suites 17-27): Modify device state (format, sanitize, reset, etc.).
   Require ``--allow-destructive`` flag and refuse to run on the OS drive.
 
@@ -60,6 +62,15 @@ Non-Destructive Functional Suites
    suite_14_async_event
    suite_15_additional_logs
    suite_16_additional_id
+
+Command Set Specific Suites
+----------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   suite_28_zns
+   suite_29_kv
 
 Destructive Suites
 ------------------

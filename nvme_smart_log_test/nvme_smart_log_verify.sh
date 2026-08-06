@@ -3,8 +3,9 @@
 # Copyright (C) 2025 Red Hat, Inc.
 #
 # NVMe SMART / Health Information Log verification
-# Based on NVMe Base Specification, Revision 2.1
-# Section 5.1.12, Figure 206 — SMART / Health Information Log
+# Based on NVMe Base Specification, Revision 2.1+
+# Section 5.2.13 (2.4) / 5.1.12 (2.1), Figure 214 (2.4) / 206 (2.1)
+# SMART / Health Information Log
 # Field names from nvme-cli upstream nvme-print-stdout.c
 #
 # Usage:
@@ -438,6 +439,65 @@ test_num_err_cross_validate() {
 }
 
 # --------------------------------------------------------------------------
+# NVMe 2.4 SMART fields (bytes 544+)
+# --------------------------------------------------------------------------
+
+test_olec() {
+	if ! ver_at_least 2 4; then
+		log_skip "Outstanding LBA Error Count (OLEC)" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(echo "$SMART_LOG" | grep -i "outstanding.*lba\|olec" | grep -oP '[0-9,]+' | head -1 | tr -d ',')
+	if [ -z "$val" ]; then
+		val=$(echo "$SMART_JSON" | grep -oP '"olec"\s*:\s*\K[0-9]+' 2>/dev/null || true)
+	fi
+	if [ -z "$val" ]; then
+		log_skip "Outstanding LBA Error Count (OLEC)" "not in nvme-cli output (needs newer nvme-cli)"
+		return
+	fi
+	if [ "$val" -eq 0 ]; then
+		log_pass "Outstanding LBA Error Count (OLEC) = 0 — no outstanding LBA errors"
+	else
+		log_pass "Outstanding LBA Error Count (OLEC) = ${val}"
+	fi
+}
+
+test_ipm() {
+	if ! ver_at_least 2 4; then
+		log_skip "Idle Power Mode (IPM)" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(echo "$SMART_LOG" | grep -i "idle.*power\|ipm" | grep -oP '[0-9,]+' | head -1 | tr -d ',')
+	if [ -z "$val" ]; then
+		val=$(echo "$SMART_JSON" | grep -oP '"ipm"\s*:\s*\K[0-9]+' 2>/dev/null || true)
+	fi
+	if [ -z "$val" ]; then
+		log_skip "Idle Power Mode (IPM)" "not in nvme-cli output (needs newer nvme-cli)"
+		return
+	fi
+	log_pass "Idle Power Mode (IPM) = ${val}"
+}
+
+test_infw() {
+	if ! ver_at_least 2 4; then
+		log_skip "Informational NVM Firmware Warnings (INFW)" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(echo "$SMART_LOG" | grep -i "informational.*nvm\|infw" | grep -oP '[0-9,]+' | head -1 | tr -d ',')
+	if [ -z "$val" ]; then
+		val=$(echo "$SMART_JSON" | grep -oP '"infw"\s*:\s*\K[0-9]+' 2>/dev/null || true)
+	fi
+	if [ -z "$val" ]; then
+		log_skip "Informational NVM Firmware Warnings (INFW)" "not in nvme-cli output (needs newer nvme-cli)"
+		return
+	fi
+	log_pass "Informational NVM Firmware Warnings (INFW) = ${val}"
+}
+
+# --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 
@@ -451,7 +511,7 @@ main() {
 		echo -e "${BOLD}No device specified — auto-detected: ${ctrl_dev}${RESET}"
 	elif [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 		echo "Usage: $0 [/dev/nvmeX | /dev/nvmeXnY]"
-		echo "Verifies NVMe SMART / Health Information Log per NVMe Base Spec 2.1."
+		echo "Verifies NVMe SMART / Health Information Log per NVMe Base Spec 2.1+."
 		exit 0
 	else
 		ctrl_dev=$(resolve_ctrl_dev "$1")
@@ -481,6 +541,7 @@ main() {
 		exit 1
 	fi
 	log_cmd "SMART / Health Information Log" "nvme smart-log ${ctrl_dev}" "$SMART_LOG"
+	SMART_JSON=$(nvme smart-log "$ctrl_dev" -o json 2>/dev/null || true)
 
 	echo -e "${BOLD}--- Critical Warning & Temperature ---${RESET}"
 	test_critical_warning
@@ -514,6 +575,12 @@ main() {
 	test_thm_t2_trans_count
 	test_thm_t1_total_time
 	test_thm_t2_total_time
+
+	echo ""
+	echo -e "${BOLD}--- NVMe 2.4 Extended SMART Fields ---${RESET}"
+	test_olec
+	test_ipm
+	test_infw
 
 	echo ""
 	echo -e "${BOLD}--- Cross-Validation Checks ---${RESET}"

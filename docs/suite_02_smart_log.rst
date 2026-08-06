@@ -9,10 +9,12 @@ Overview
 --------
 
 Validates all mandatory and optional fields in the NVMe SMART / Health
-Information Log (NVMe Base Specification, Revision 2.1, Section 5.1.12,
-Figure 206). Each field is checked for presence and plausible values.
-Cross-validation tests compare SMART counters against Identify Controller
-thresholds and Error Information Log entries to detect inconsistencies.
+Information Log (NVMe Base Specification, Revision 2.1+, Section 5.2.13 (2.4)
+/ 5.1.12 (2.1), Figure 214 (2.4) / 206 (2.1)). Each field is checked for
+presence and plausible values.  Cross-validation tests compare SMART counters
+against Identify Controller thresholds and Error Information Log entries to
+detect inconsistencies.  On NVMe 2.4+ controllers, new extended fields (OLEC,
+IPM, INFW) are tested when nvme-cli exposes them.
 
 Prerequisites
 -------------
@@ -155,7 +157,26 @@ Test Steps
       :Fail: field not present
       :Skip: controller is pre-NVMe 1.3
 
-6. **Cross-Validation Checks**
+6. **NVMe 2.4 Extended SMART Fields**
+
+   a. **test_olec** -- Check for Outstanding LBA Error Count (OLEC) field,
+      new in NVMe 2.4 (bytes 544+).
+
+      :Pass: OLEC value is reported
+      :Skip: NVMe < 2.4, or field not in nvme-cli output (needs newer nvme-cli)
+
+   b. **test_ipm** -- Check for Idle Power Mode (IPM) field, new in NVMe 2.4.
+
+      :Pass: IPM value is reported
+      :Skip: NVMe < 2.4, or field not in nvme-cli output
+
+   c. **test_infw** -- Check for Informational NVM Firmware Warnings (INFW)
+      field, new in NVMe 2.4.
+
+      :Pass: INFW value is reported
+      :Skip: NVMe < 2.4, or field not in nvme-cli output
+
+7. **Cross-Validation Checks**
 
    a. **test_spare_vs_threshold** -- Cross-check available_spare against available_spare_threshold and critical_warning bit 0.
 
@@ -188,7 +209,7 @@ Test Steps
       :Warn: SMART reports 0 errors but error-log has entries
       :Skip: could not read error-log
 
-7. **Summary**
+8. **Summary**
 
    - Report total PASS / FAIL / SKIP / WARN counts
    - Exit with non-zero status if any FAIL

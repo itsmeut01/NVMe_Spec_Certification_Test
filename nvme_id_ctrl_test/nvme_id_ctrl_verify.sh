@@ -3,10 +3,10 @@
 # Copyright (C) 2025 Red Hat, Inc.
 #
 # Standalone NVMe Identify Controller mandatory field verification
-# Based on NVMe Base Specification, Revision 2.1
-# Section 5.1.13.2.1, Figure 312 — Identify Controller Data Structure
+# Based on NVMe Base Specification, Revision 2.4
+# Section 5.2.14.2.1, Figure 338 — Identify Controller Data Structure
 # Covers ALL mandatory (M) fields for I/O controllers with version-conditional checks
-# Version gates: fields introduced in 1.2, 1.4, 2.0, 2.1 are skipped on older controllers
+# Version gates: fields introduced in 1.2, 1.4, 2.0, 2.1, 2.4 are skipped on older controllers
 #
 # Usage:
 #   ./nvme_id_ctrl_verify.sh /dev/nvme0
@@ -222,8 +222,9 @@ test_frmw() {
 	local nofs=$(( (val >> 1) & 0x7 ))
 	local ffsro=$(( val & 0x1 ))
 	local fawr=$(( (val >> 4) & 0x1 ))
+	local smud=$(( (val >> 5) & 0x1 ))
 	if [ "$nofs" -ge 1 ] && [ "$nofs" -le 7 ]; then
-		log_pass "FRMW reports at least one firmware slot (slots=${nofs}, ffsro=${ffsro}, fawr=${fawr})"
+		log_pass "FRMW reports at least one firmware slot (slots=${nofs}, ffsro=${ffsro}, fawr=${fawr}, smud=${smud})"
 	else
 		log_fail "FRMW reports at least one firmware slot" "nofs=${nofs}"
 	fi
@@ -579,6 +580,104 @@ test_cqt() {
 	fi
 }
 
+test_nssl() {
+	if ! ver_at_least 2 4; then
+		log_skip "NSSL (NVM Subsystem Shutdown Latency) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(get_field "nssl")
+	if [ -n "$val" ]; then
+		log_pass "NSSL (NVM Subsystem Shutdown Latency) is reported (${val})"
+	else
+		log_fail "NSSL (NVM Subsystem Shutdown Latency) is reported" "not present"
+	fi
+}
+
+test_plsi() {
+	if ! ver_at_least 2 4; then
+		log_skip "PLSI (Power Loss Signaling Information) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(get_field "plsi")
+	if [ -n "$val" ]; then
+		local plsi_int=$((val))
+		local plsepf=$(( plsi_int & 0x1 ))
+		local plsfq=$(( (plsi_int >> 1) & 0x1 ))
+		log_pass "PLSI (Power Loss Signaling Information) is reported (0x$(printf '%02x' "$plsi_int"), plsepf=${plsepf}, plsfq=${plsfq})"
+	else
+		log_fail "PLSI (Power Loss Signaling Information) is reported" "not present"
+	fi
+}
+
+test_crcap() {
+	if ! ver_at_least 2 4; then
+		log_skip "CRCAP (Controller Reachability Capabilities) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(get_field "crcap")
+	if [ -n "$val" ]; then
+		local crcap_int=$((val))
+		local rrsup=$(( crcap_int & 0x1 ))
+		local rgidc=$(( (crcap_int >> 1) & 0x1 ))
+		log_pass "CRCAP (Controller Reachability Capabilities) is reported (0x$(printf '%02x' "$crcap_int"), rrsup=${rrsup}, rgidc=${rgidc})"
+	else
+		log_fail "CRCAP (Controller Reachability Capabilities) is reported" "not present"
+	fi
+}
+
+test_mptfawr() {
+	if ! ver_at_least 2 4; then
+		log_skip "MPTFAWR (Max Processing Time for FW Activation Without Reset) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(get_field "mptfawr")
+	if [ -n "$val" ]; then
+		local mptfawr_int=$((val))
+		if [ "$mptfawr_int" -eq 0 ]; then
+			log_pass "MPTFAWR (Max Processing Time for FW Activation Without Reset) is reported (no limit)"
+		else
+			local ms=$(( mptfawr_int * 100 ))
+			log_pass "MPTFAWR (Max Processing Time for FW Activation Without Reset) is reported (${ms} ms)"
+		fi
+	else
+		log_fail "MPTFAWR (Max Processing Time for FW Activation Without Reset) is reported" "not present"
+	fi
+}
+
+test_megcap() {
+	if ! ver_at_least 2 4; then
+		log_skip "MEGCAP (Max Endurance Group Capacity) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(echo "$ID_CTRL" | grep "^megcap " | sed 's/^megcap *: *//' | awk '{ print $1 }')
+	if [ -n "$val" ]; then
+		log_pass "MEGCAP (Max Endurance Group Capacity) is reported (${val})"
+	else
+		log_fail "MEGCAP (Max Endurance Group Capacity) is reported" "not present"
+	fi
+}
+
+test_tmpthha() {
+	if ! ver_at_least 2 4; then
+		log_skip "TMPTHHA (Temperature Threshold Hysteresis Attributes) is reported" "requires NVMe 2.4+"
+		return
+	fi
+	local val
+	val=$(get_field "tmpthha")
+	if [ -n "$val" ]; then
+		local tmpthha_int=$((val))
+		local tmpthmh=$(( tmpthha_int & 0x7 ))
+		log_pass "TMPTHHA (Temperature Threshold Hysteresis Attributes) is reported (0x$(printf '%02x' "$tmpthha_int"), hysteresis=${tmpthmh})"
+	else
+		log_fail "TMPTHHA (Temperature Threshold Hysteresis Attributes) is reported" "not present"
+	fi
+}
+
 test_fuses() {
 	local val
 	val=$(get_field "fuses")
@@ -597,7 +696,8 @@ test_fna() {
 		local fns=$(( val & 0x1 ))
 		local sens=$(( (val >> 1) & 0x1 ))
 		local cryes=$(( (val >> 2) & 0x1 ))
-		log_pass "FNA (Format NVM Attributes) is reported (0x$(printf '%02x' "$val"), fns=${fns} sens=${sens} cryes=${cryes})"
+		local bcnsid=$(( (val >> 3) & 0x1 ))
+		log_pass "FNA (Format NVM Attributes) is reported (0x$(printf '%02x' "$val"), fns=${fns} sens=${sens} cryes=${cryes} bcnsid=${bcnsid})"
 	else
 		log_fail "FNA (Format NVM Attributes) is reported" "not present"
 	fi
@@ -724,6 +824,13 @@ test_oacs_bit_decode() {
 	local glbas=$(( (oacs_int >> 9) & 0x1 ))
 	local lock=$(( (oacs_int >> 10) & 0x1 ))
 	local hmlms=$(( (oacs_int >> 11) & 0x1 ))
+	local enss=$(( (oacs_int >> 12) & 0x1 ))
+	local ccfls=$(( (oacs_int >> 13) & 0x1 ))
+
+	local bits_summary="sec=${sec} fmt=${fmt} fw=${fwc} ns=${nsm} dst=${dst} dir=${dir} nmi=${nmi} vir=${vir} dbc=${dbc} lba=${glbas} lock=${lock} hmlms=${hmlms}"
+	if ver_at_least 2 4; then
+		bits_summary="${bits_summary} enss=${enss} ccfls=${ccfls}"
+	fi
 
 	if [ "$fwc" -eq 1 ]; then
 		local frmw
@@ -731,15 +838,15 @@ test_oacs_bit_decode() {
 		if [ -n "$frmw" ]; then
 			local nofs=$(( (frmw >> 1) & 0x7 ))
 			if [ "$nofs" -ge 1 ]; then
-				log_pass "OACS bit decode: FW Commit supported (bit 2=1), FRMW slots=${nofs} (sec=${sec} fmt=${fmt} fw=${fwc} ns=${nsm} dst=${dst} dir=${dir} nmi=${nmi} vir=${vir} dbc=${dbc} lba=${glbas} lock=${lock} hmlms=${hmlms})"
+				log_pass "OACS bit decode: FW Commit supported (bit 2=1), FRMW slots=${nofs} (${bits_summary})"
 			else
 				log_fail "OACS cross-check: FW Commit supported but FRMW slots=0" "frmw=0x$(printf '%02x' "$frmw")"
 			fi
 		else
-			log_pass "OACS bit decode: FW Commit supported (bit 2=1) (sec=${sec} fmt=${fmt} fw=${fwc} ns=${nsm} dst=${dst})"
+			log_pass "OACS bit decode: FW Commit supported (bit 2=1) (${bits_summary})"
 		fi
 	else
-		log_pass "OACS bit decode (0x$(printf '%04x' "$oacs_int")): sec=${sec} fmt=${fmt} fw=${fwc} ns=${nsm} dst=${dst} dir=${dir} nmi=${nmi} vir=${vir} dbc=${dbc} lba=${glbas} lock=${lock} hmlms=${hmlms}"
+		log_pass "OACS bit decode (0x$(printf '%04x' "$oacs_int")): ${bits_summary}"
 	fi
 }
 
@@ -760,7 +867,15 @@ test_oncs_bit_decode() {
 	local ts=$(( (oncs_int >> 6) & 0x1 ))
 	local vrfy=$(( (oncs_int >> 7) & 0x1 ))
 	local copy=$(( (oncs_int >> 8) & 0x1 ))
-	log_pass "ONCS bit decode (0x$(printf '%04x' "$oncs_int")): cmp=${cmp} wu=${wu} dsm=${dsm} wz=${wz} saf=${saf} rsv=${rsv} ts=${ts} vrfy=${vrfy} copy=${copy}"
+	local csa=$(( (oncs_int >> 9) & 0x1 ))
+	local afc=$(( (oncs_int >> 10) & 0x1 ))
+	local maxwzd=$(( (oncs_int >> 11) & 0x1 ))
+	local nszs=$(( (oncs_int >> 12) & 0x1 ))
+	if ver_at_least 2 4; then
+		log_pass "ONCS bit decode (0x$(printf '%04x' "$oncs_int")): cmp=${cmp} wu=${wu} dsm=${dsm} wz=${wz} saf=${saf} rsv=${rsv} ts=${ts} vrfy=${vrfy} copy=${copy} csa=${csa} afc=${afc} maxwzd=${maxwzd} nszs=${nszs}"
+	else
+		log_pass "ONCS bit decode (0x$(printf '%04x' "$oncs_int")): cmp=${cmp} wu=${wu} dsm=${dsm} wz=${wz} saf=${saf} rsv=${rsv} ts=${ts} vrfy=${vrfy} copy=${copy}"
+	fi
 }
 
 test_ctratt_bit_decode() {
@@ -785,7 +900,25 @@ test_ctratt_bit_decode() {
 	local ng=$(( (ctratt_int >> 7) & 0x1 ))
 	local sqa=$(( (ctratt_int >> 8) & 0x1 ))
 	local ulist=$(( (ctratt_int >> 9) & 0x1 ))
-	log_pass "CTRATT bit decode (0x$(printf '%08x' "$ctratt_int")): 128id=${hids} nopspm=${nopspm} nsets=${nsets} rrlvls=${rrlvls} egs=${egs} plm=${plm} tbkas=${tbkas} ng=${ng} sqa=${sqa} uuid=${ulist}"
+	local mds=$(( (ctratt_int >> 10) & 0x1 ))
+	local fcm=$(( (ctratt_int >> 11) & 0x1 ))
+	local vcm=$(( (ctratt_int >> 12) & 0x1 ))
+	local deg=$(( (ctratt_int >> 13) & 0x1 ))
+	local dnvms=$(( (ctratt_int >> 14) & 0x1 ))
+	local elbas=$(( (ctratt_int >> 15) & 0x1 ))
+	local mem=$(( (ctratt_int >> 16) & 0x1 ))
+	local hmbr=$(( (ctratt_int >> 17) & 0x1 ))
+	local rhii=$(( (ctratt_int >> 18) & 0x1 ))
+	local fdps=$(( (ctratt_int >> 19) & 0x1 ))
+	if ver_at_least 2 4; then
+		local pls=$(( (ctratt_int >> 20) & 0x1 ))
+		local pms=$(( (ctratt_int >> 21) & 0x1 ))
+		local vms=$(( (ctratt_int >> 22) & 0x1 ))
+		local iiellss=$(( (ctratt_int >> 23) & 0x1 ))
+		log_pass "CTRATT bit decode (0x$(printf '%08x' "$ctratt_int")): 128id=${hids} nopspm=${nopspm} nsets=${nsets} rrlvls=${rrlvls} egs=${egs} plm=${plm} tbkas=${tbkas} ng=${ng} sqa=${sqa} uuid=${ulist} mds=${mds} fcm=${fcm} vcm=${vcm} deg=${deg} dnvms=${dnvms} elbas=${elbas} mem=${mem} hmbr=${hmbr} rhii=${rhii} fdps=${fdps} pls=${pls} pms=${pms} vms=${vms} iiellss=${iiellss}"
+	else
+		log_pass "CTRATT bit decode (0x$(printf '%08x' "$ctratt_int")): 128id=${hids} nopspm=${nopspm} nsets=${nsets} rrlvls=${rrlvls} egs=${egs} plm=${plm} tbkas=${tbkas} ng=${ng} sqa=${sqa} uuid=${ulist} mds=${mds} fcm=${fcm} vcm=${vcm} deg=${deg} dnvms=${dnvms} elbas=${elbas} mem=${mem} hmbr=${hmbr} rhii=${rhii} fdps=${fdps}"
+	fi
 }
 
 test_mdts_reasonable() {
@@ -1009,10 +1142,18 @@ test_reserved_bits() {
 	local fail=0
 	if [ -n "$oacs" ]; then
 		local oacs_int=$((oacs))
-		local oacs_rsvd=$(( (oacs_int >> 12) & 0xF ))
-		if [ "$oacs_rsvd" -ne 0 ]; then
-			log_fail "OACS reserved bits [15:12] must be 0" "got 0x$(printf '%x' "$oacs_rsvd")"
-			fail=1
+		if ver_at_least 2 4; then
+			local oacs_rsvd=$(( (oacs_int >> 14) & 0x3 ))
+			if [ "$oacs_rsvd" -ne 0 ]; then
+				log_fail "OACS reserved bits [15:14] must be 0 (NVMe 2.4)" "got 0x$(printf '%x' "$oacs_rsvd")"
+				fail=1
+			fi
+		else
+			local oacs_rsvd=$(( (oacs_int >> 12) & 0xF ))
+			if [ "$oacs_rsvd" -ne 0 ]; then
+				log_fail "OACS reserved bits [15:12] must be 0" "got 0x$(printf '%x' "$oacs_rsvd")"
+				fail=1
+			fi
 		fi
 	fi
 	if [ -n "$oncs" ]; then
@@ -1042,7 +1183,7 @@ main() {
 		echo -e "${BOLD}No device specified — auto-detected: ${ctrl_dev}${RESET}"
 	elif [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 		echo "Usage: $0 [/dev/nvmeX | /dev/nvmeXnY]"
-		echo "Verifies NVMe Identify Controller mandatory fields per NVMe Base Spec 2.1."
+		echo "Verifies NVMe Identify Controller mandatory fields per NVMe Base Spec 2.4."
 		exit 0
 	else
 		ctrl_dev=$(resolve_ctrl_dev "$1")
@@ -1090,7 +1231,10 @@ main() {
 	test_oaes
 	test_ctratt
 	test_bpcap
+	test_nssl
+	test_plsi
 	test_cntrltype
+	test_crcap
 	test_nvmsr
 	test_vwci
 	test_mec
@@ -1109,6 +1253,9 @@ main() {
 	test_cctemp
 	test_fwug
 	test_kas
+	test_mptfawr
+	test_megcap
+	test_tmpthha
 	test_cqt
 
 	echo ""

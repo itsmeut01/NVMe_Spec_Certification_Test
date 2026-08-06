@@ -146,7 +146,47 @@ Test Steps
       :Pass: command completes and log is accessible
       :Skip: requires NVMe 1.4+, or controller returns not-supported/invalid
 
-5. **Summary**
+5. **NVM CS 1.3 / PCIe Transport 1.4 Log Pages**
+
+   a. **test_rate_limiting_log** -- read the Rate Limiting log page (LID 0x28), from NVM CS 1.3.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x28 -l 4096``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.0, or controller returns not-supported/invalid
+
+   b. **test_eom_log** -- read the Eye Opening Measurement log page (LID 0x19), from PCIe Transport 1.4.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x19 -l 4096``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.0, or controller returns not-supported/invalid
+
+6. **NVMe 2.4 Log Pages**
+
+   a. **test_power_measurement_log** -- read the Power Measurement log page (LID 0x17), new in NVMe 2.4.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x17 -l 512``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.4, or controller returns not-supported/invalid
+
+   b. **test_voltage_measurement_log** -- read the Voltage Measurement log page (LID 0x18), new in NVMe 2.4.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x18 -l 512``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.4, or controller returns not-supported/invalid
+
+   c. **test_cross_controller_reset_log** -- read the Cross-Controller Reset log page (LID 0x1E), new in NVMe 2.4.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x1E -l 512``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.4, or controller returns not-supported/invalid
+
+   d. **test_lost_host_comm_log** -- read the Lost Host Communication log page (LID 0x1F), new in NVMe 2.4.
+
+      :Command: ``nvme get-log /dev/nvmeX -i 0x1F -l 512``
+      :Pass: log data is accessible
+      :Skip: NVMe < 2.4, or controller returns not-supported/invalid
+
+7. **Summary**
 
    - Report total PASS / FAIL / SKIP / WARN counts
    - Exit with non-zero status if any FAIL

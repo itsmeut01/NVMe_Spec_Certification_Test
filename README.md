@@ -24,9 +24,9 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 
 ## Features
 
-- **27 test suites** covering all major NVMe data structures, commands, and functional behaviors
-- **~399 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
-- **Version-aware testing** — automatically gates checks on the device's reported NVMe version (1.0 through 2.1)
+- **29 test suites** covering all major NVMe data structures, commands, and functional behaviors
+- **~456 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
+- **Version-aware testing** — automatically gates checks on the device's reported NVMe version (1.0 through 2.4)
 - **Dynamic spec references** — maps the device's NVMe version to the correct spec revision, section, and figure
 - **Safe device infrastructure** — OS drive detection via `findmnt`, `lsblk`, and LVM symlink resolution; destructive tests always refuse the boot drive
 - **Behavioral validation** — set-feature tests verify actual behavior changes (I/O under different cache/power/arbitration settings), not just readback
@@ -41,16 +41,16 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 
 | # | Suite | Command | Tests | Description |
 |---|-------|---------|-------|-------------|
-| 1 | Identify Controller | `nvme id-ctrl` | ~62 | Mandatory fields, OACS/ONCS/CTRATT/LPA/SGLS bit decode, thermal cross-checks, capacity validation |
-| 2 | SMART / Health Log | `nvme smart-log` | ~22 | All SMART fields, spare vs threshold, temperature vs WCTEMP, percentage used, error count cross-validation |
+| 1 | Identify Controller | `nvme id-ctrl` | ~65 | Mandatory fields, OACS/ONCS/CTRATT/LPA/SGLS bit decode, thermal cross-checks, capacity validation, NVMe 2.4 fields (NSSL, PLSI, CRCAP, MPTFAWR, MEGCAP, TMPTHHA) |
+| 2 | SMART / Health Log | `nvme smart-log` | ~30 | All SMART fields, spare vs threshold, temperature vs WCTEMP, percentage used, error count cross-validation, NVMe 2.4 extended fields (OLEC, IPM, INFW) |
 | 3 | Error Information Log | `nvme error-log` | ~13 | Error entries, status field decode, cross-check with SMART num_err_log_entries |
 | 4 | Firmware Slot Info | `nvme fw-log` | ~9 | Firmware slot fields, active slot validation |
 | 5 | Identify Namespace | `nvme id-ns` | ~38 | Namespace fields, NSFEAT/MC/DPC/DPS/RESCAP/FPI/DLFEAT bit decode, LBA format validation |
 | 6 | Power State Descriptors | `nvme id-ctrl` (ps) | ~15 | Power state fields, idle/active vs max power, latency trend, APSTA consistency |
 | 7 | Controller Registers | `nvme show-regs` | 11 | CSTS.RDY, CSTS.CFS, CSTS.SHST, CC.EN, CAP.MQES, CAP.CSS, CAP.TO (timeout), CAP.CRMS (ready modes), CRTO (ready timeouts), VS vs id-ctrl VER |
-| 8 | Supported Log Pages | `nvme supported-log-pages` | 9 | Mandatory LIDs (01h-05h incl. Changed NS List, Commands Effects), conditional DST/Effects logs (NVMe 2.0+) |
+| 8 | Supported Log Pages | `nvme supported-log-pages` | 14 | Mandatory LIDs (01h-05h), conditional DST/Effects/Endurance Group logs, NVM CS 1.3 Rate Limiting (28h), PCIe Transport EOM (19h), NVMe 2.4 LIDs (17h, 18h) |
 | 9 | Commands Effects Log | `nvme effects-log` | 10 | Mandatory admin commands (Identify, Get/Set Features, Abort), I/O commands (Read, Write, Flush) |
-| 10 | Get Features | `nvme get-feature` | 13 | Number of Queues, Volatile Write Cache, Power Management, Temperature Threshold, Arbitration, APST, HCTM, Interrupt Vector Config (0x09), Async Event Config (0x0B), Keep Alive Timer (0x0F) |
+| 10 | Get Features | `nvme get-feature` | 21 | Number of Queues, Volatile Write Cache, Power Management, Temperature Threshold, Arbitration, APST, HCTM, Interrupt Vector Config, AEC, Keep Alive Timer, NVM CS 1.3 (Performance Characteristics, Rate Limiting), NVMe 2.4 (CDP, Power Limit/Threshold/Measurement, Voltage Threshold/Measurement) |
 | 11 | NS ID Descriptors | `nvme ns-descs` | 7 | EUI-64, NGUID, UUID presence, at least one non-zero, CSI (2.0+), descriptor lengths |
 | 12 | Device Self-test Log | `nvme self-test-log` | 6 | Current operation, completed results, result codes, segment numbers, POH timestamps |
 
@@ -60,8 +60,10 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 |---|-------|---------|-------|-------------|
 | 13 | DST Functional | `nvme device-self-test` | 6 | Start/poll/verify short DST, abort DST, start extended, abort extended |
 | 14 | Async Event | `nvme get-feature`, `admin-passthru` | 7 | AERL check, temperature threshold event trigger, error log increment via invalid opcode, SMART consistency after error injection, Abort command (opcode 0x08), Abort with invalid SQID, AEC feature readback |
-| 15 | Additional Logs | `nvme telemetry-log`, `nvme persistent-event-log`, misc | 16 | Telemetry behavioral cycle (generate→verify→read), persistent event log lifecycle (establish→read→release), endurance, changed-ns, reservation-notif, FID-effects, LBA-status, predictable-lat, boot-part, endurance-event-agg |
-| 16 | Additional Identify | `nvme list-ctrl`, `nvme nvm-id-ctrl`, misc | 16 | list-ctrl, list-subsys, primary-ctrl-caps, list-secondary, id-uuid, nvm-id-ctrl, nvm-id-ns, cmdset-ind-id-ns, id-domain, id-iocs, id-nvmset, id-ns-granularity, id-ns-lba-format, list-endgrp, nvm-id-ns-lba-format |
+| 15 | Additional Logs | `nvme telemetry-log`, `nvme persistent-event-log`, misc | 22 | Telemetry behavioral cycle, persistent event log lifecycle, endurance, changed-ns, reservation-notif, FID-effects, LBA-status, predictable-lat, boot-part, endurance-event-agg, NVM CS 1.3 Rate Limiting log, PCIe Transport EOM log, NVMe 2.4 logs (Power/Voltage Measurement, Cross-Controller Reset, Lost Host Comm) |
+| 16 | Additional Identify | `nvme list-ctrl`, `nvme nvm-id-ctrl`, misc | 19 | list-ctrl, list-subsys, primary-ctrl-caps, list-secondary, id-uuid, nvm-id-ctrl (+ NVM CS version, kpiocap/64b Guard PI, Copy limits), nvm-id-ns, cmdset-ind-id-ns, id-domain, id-iocs, id-nvmset, id-ns-granularity, id-ns-lba-format, list-endgrp, nvm-id-ns-lba-format |
+| 28 | ZNS Command Set | `nvme zns id-ctrl/id-ns/report-zones` | 19 | ZNS detection (CSI=2), zasl range, zoc/ozcs decode (VZC, ZAE, RAZB, ZRWA), mar/mor limits, rrl/frl + multi-level time limits (rrl1-3/frl1-3), ZRWA fields + explicit flush cap, lbafe zone size, report-zones + zone count/states, changed-zone-list, zone lifecycle (open/close/reset), ZRWA flush |
+| 29 | KV Command Set | `nvme ns-descs`, `nvme get-feature`, `nvme io-passthru` | 9 | KV detection (CSI=3), KV id-ns (nsze/ncap), FID 0x20 (EDNEK config), KV I/O probe (List keys, Exist), KV Store/Retrieve/Delete lifecycle |
 
 ### Destructive Suites (require `--destructive`)
 
@@ -211,8 +213,8 @@ The `docs/` directory contains RST (reStructuredText) test plan files for all 27
 ```
 docs/
 ├── index.rst                    # Master index with table of contents
-├── suite_01_id_ctrl.rst         # Suite 1:  Identify Controller (45 tests)
-├── suite_02_smart_log.rst       # Suite 2:  SMART / Health Log (27 tests)
+├── suite_01_id_ctrl.rst         # Suite 1:  Identify Controller (65 tests)
+├── suite_02_smart_log.rst       # Suite 2:  SMART / Health Log (30 tests)
 ├── ...
 └── suite_27_advanced_admin.rst  # Suite 27: Advanced Admin (7 tests)
 ```

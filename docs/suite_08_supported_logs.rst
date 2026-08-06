@@ -92,7 +92,42 @@ Test Steps
       :Warn: LPA bit 1 = 1 but LID 0x05 not found in supported-log-pages
       :Skip: LPA bit 1 = 0, or LPA not available
 
-5. **Summary**
+   c. **test_endurance_group_log_if_supported** -- If Endurance Groups are
+      supported (CTRATT bit 4 = 1), verify LID 0x09 is listed.
+
+      :Pass: LID 0x09 listed and CTRATT bit 4 = 1
+      :Warn: CTRATT bit 4 = 1 but LID 0x09 not found
+      :Skip: CTRATT bit 4 = 0, or CTRATT not available
+
+5. **NVM CS 1.3 / PCIe Transport 1.4 Log Pages**
+
+   a. **test_rate_limiting_log_if_nvm_cs** -- Check if LID 0x28 (Rate
+      Limiting Log) is listed on NVMe 2.0+ controllers.
+
+      :Pass: LID 0x28 is listed
+      :Skip: NVMe < 2.0, or optional log not listed
+
+   b. **test_eom_log_if_pcie_transport** -- Check if LID 0x19 (Eye Opening
+      Measurement Log) is listed, from PCIe Transport Specification 1.4.
+
+      :Pass: LID 0x19 is listed
+      :Skip: NVMe < 2.0, or optional transport log not listed
+
+6. **NVMe 2.4 Log Pages**
+
+   a. **test_power_measurement_log_if_24** -- Check if LID 0x17 (Power
+      Measurement Log) is listed on NVMe 2.4+ controllers.
+
+      :Pass: LID 0x17 is listed
+      :Skip: NVMe < 2.4, or optional log not listed
+
+   b. **test_voltage_measurement_log_if_24** -- Check if LID 0x18 (Voltage
+      Measurement Log) is listed on NVMe 2.4+ controllers.
+
+      :Pass: LID 0x18 is listed
+      :Skip: NVMe < 2.4, or optional log not listed
+
+7. **Summary**
 
    a. **test_supported_logs_summary** -- Report the total number of
       supported log pages parsed from the output.

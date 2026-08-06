@@ -550,7 +550,9 @@ _get_spec_rev() {
 	local minor=$(( (ver_int >> 8) & 0xff ))
 
 	if [ "$major" -ge 2 ]; then
-		if [ "$minor" -ge 1 ]; then echo "2.1"
+		if [ "$minor" -ge 4 ]; then echo "2.4"
+		elif [ "$minor" -ge 2 ]; then echo "2.2"
+		elif [ "$minor" -ge 1 ]; then echo "2.1"
 		else echo "2.0"; fi
 	elif [ "$major" -eq 1 ]; then
 		if [ "$minor" -ge 4 ]; then echo "1.4"
@@ -571,6 +573,8 @@ get_spec_ref() {
 	case "$topic" in
 		id-ctrl)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.14.2.1, Figure 338" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.13.2.1, Figure 312" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13.2.1, Figure 312" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17.2.1, Figure 275" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15.2.1, Figure 247" ;;
@@ -580,6 +584,8 @@ get_spec_ref() {
 			esac ;;
 		smart-log)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Get Log Page)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 206" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 206" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.2" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.2" ;;
@@ -588,6 +594,8 @@ get_spec_ref() {
 			esac ;;
 		error-log)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Get Log Page)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 205" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 205" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.1" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.1" ;;
@@ -596,6 +604,8 @@ get_spec_ref() {
 			esac ;;
 		fw-log)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Get Log Page)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 208" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 208" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.3" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.3" ;;
@@ -604,6 +614,8 @@ get_spec_ref() {
 			esac ;;
 		id-ns)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.14, Figure 345" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.13, Figure 319" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13, Figure 319" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17.2.2" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15.2.2" ;;
@@ -612,6 +624,8 @@ get_spec_ref() {
 			esac ;;
 		power-state)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.14.2.1, Figure 339" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.13, Figure 313" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13, Figure 313" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17.2.1" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15.2.1" ;;
@@ -619,6 +633,8 @@ get_spec_ref() {
 			esac ;;
 		show-regs)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 3.1.4, Figure 36" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 3.1.4, Figure 36" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 3.1, Figure 36" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 3.1.3" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 3.1.5" ;;
@@ -626,12 +642,16 @@ get_spec_ref() {
 			esac ;;
 		supported-logs)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 204" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 204" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1" ;;
 				*)   echo "NVMe Base Specification, Revision ${spec_rev}" ;;
 			esac ;;
 		effects-log)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Commands Supported and Effects)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 210" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 210" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.4" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.5" ;;
@@ -640,6 +660,8 @@ get_spec_ref() {
 			esac ;;
 		get-feature)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.12 (Get Features)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.11 (Get Features)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.7" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.12" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.10" ;;
@@ -647,6 +669,8 @@ get_spec_ref() {
 			esac ;;
 		ns-descs)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.14.4" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.13.4" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13.4" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17.2.4" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15.2.4" ;;
@@ -655,6 +679,8 @@ get_spec_ref() {
 			esac ;;
 		self-test-log)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Device Self-test Log)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12, Figure 211" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12, Figure 211" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16.1.6" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14.1.6" ;;
@@ -662,6 +688,8 @@ get_spec_ref() {
 			esac ;;
 		feature-set)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.30 (Set Features)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.25 (Set Features)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.25 (Set Features)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.27 (Set Features)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.21 (Set Features)" ;;
@@ -670,6 +698,8 @@ get_spec_ref() {
 			esac ;;
 		io-test)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 7 (I/O Commands) + NVM CS 1.3" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 7 (I/O Commands)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7 (I/O Commands)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7 (I/O Commands)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6 (NVM Command Set)" ;;
@@ -678,6 +708,8 @@ get_spec_ref() {
 			esac ;;
 		dst-functional)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.6 (Device Self-test)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.5 (Device Self-test)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.5 (Device Self-test)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.9 (Device Self-test)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.8 (Device Self-test)" ;;
@@ -685,6 +717,8 @@ get_spec_ref() {
 			esac ;;
 		format)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.11 (Format NVM)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.10 (Format NVM)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.10 (Format NVM)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.14 (Format NVM)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.23 (Format NVM)" ;;
@@ -692,6 +726,8 @@ get_spec_ref() {
 			esac ;;
 		sanitize)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.26 (Sanitize)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.22 (Sanitize)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.22 (Sanitize)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.24 (Sanitize)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.24 (Sanitize)" ;;
@@ -699,6 +735,8 @@ get_spec_ref() {
 			esac ;;
 		ns-mgmt)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.25 (Namespace Management)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.21 (Namespace Management)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.21 (Namespace Management)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.23 (Namespace Management)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.20 (Namespace Management)" ;;
@@ -706,6 +744,8 @@ get_spec_ref() {
 			esac ;;
 		reservation)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 7.5-7.8 (Reservations)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 7.5-7.8 (Reservations)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7.5-7.8 (Reservations)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7.2-7.5 (Reservations)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6.10-6.13 (Reservations)" ;;
@@ -713,6 +753,8 @@ get_spec_ref() {
 			esac ;;
 		reset)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 3.7 (Resets)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 3.7 (Resets)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 3.7 (Resets)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 3.7 (Resets)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 7.3 (Resets)" ;;
@@ -720,6 +762,8 @@ get_spec_ref() {
 			esac ;;
 		async-event)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.2 (Async Event Request)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.2 (Async Event Request)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.2 (Async Event Request)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.2 (Async Event Request)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.2 (Async Event Request)" ;;
@@ -727,6 +771,8 @@ get_spec_ref() {
 			esac ;;
 		fw-mgmt)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.9/5.2.10 (FW Download/Commit)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.8/5.1.9 (FW Download/Commit)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.8/5.1.9 (FW Download/Commit)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.12/5.13 (FW Download/Commit)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.11/5.12 (FW Download/Commit)" ;;
@@ -734,6 +780,8 @@ get_spec_ref() {
 			esac ;;
 		additional-io)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 7 + NVM CS 1.3 (Verify/Write Uncor/Copy)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 7 (Verify/Write Uncor/Copy)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 7 (Verify/Write Uncor/Copy)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 7 (Verify/Write Uncor/Copy)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 6.14/6.16 (Verify/Write Uncor)" ;;
@@ -741,6 +789,8 @@ get_spec_ref() {
 			esac ;;
 		security-directives)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.7/5.2.8/5.2.28/5.2.29 (Directives/Security)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.6/5.1.7/5.1.23/5.1.24 (Directives/Security)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.6/5.1.7/5.1.23/5.1.24 (Directives/Security)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.10/5.11/5.25/5.26 (Directives/Security)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.8/5.9/5.22/5.23 (Directives/Security)" ;;
@@ -748,6 +798,8 @@ get_spec_ref() {
 			esac ;;
 		additional-logs)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.13 (Telemetry/Persistent Event/Log Pages)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.12 (Telemetry/Persistent Event/Log Pages)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.12 (Telemetry/Persistent Event/Log Pages)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.16 (Log Pages)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.14 (Log Pages)" ;;
@@ -755,6 +807,8 @@ get_spec_ref() {
 			esac ;;
 		additional-id)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.14 (Identify Variants)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.13 (Identify Variants)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.13 (Identify Variants)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.17 (Identify Variants)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4, Section 5.15 (Identify Variants)" ;;
@@ -762,6 +816,8 @@ get_spec_ref() {
 			esac ;;
 		advanced-admin)
 			case "$spec_rev" in
+				2.4) echo "NVMe Base Specification, Revision 2.4, Section 5.2.16/7.3-7.4 (Lockdown/IO Mgmt)" ;;
+				2.2) echo "NVMe Base Specification, Revision 2.2, Section 5.1.15/7.3-7.4 (Lockdown/IO Mgmt)" ;;
 				2.1) echo "NVMe Base Specification, Revision 2.1, Section 5.1.15/7.3-7.4 (Lockdown/IO Mgmt)" ;;
 				2.0) echo "NVMe Base Specification, Revision 2.0, Section 5.18/5.25 (Lockdown/Virt Mgmt)" ;;
 				1.4) echo "NVMe Base Specification, Revision 1.4" ;;
