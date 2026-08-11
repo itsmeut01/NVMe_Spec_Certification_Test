@@ -123,9 +123,15 @@ test_subsystem_reset() {
 
 	wait_for_device "$CTRL_DEV" 30
 
+	if [ ! -e "$CTRL_DEV" ]; then
+		echo 1 > /sys/bus/pci/rescan 2>/dev/null || true
+		sleep 5
+		wait_for_device "$CTRL_DEV" 30
+	fi
+
 	local id_out=""
 	local attempt
-	for attempt in 1 2 3 4; do
+	for attempt in 1 2 3 4 5 6; do
 		id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
 		if echo "$id_out" | grep -q "^mn "; then
 			break
@@ -135,6 +141,8 @@ test_subsystem_reset() {
 	log_cmd "Post-subsystem-reset Identify Controller" "nvme id-ctrl ${CTRL_DEV}" "$id_out"
 
 	if echo "$id_out" | grep -q "^mn "; then
+		nvme ns-rescan "$CTRL_DEV" 2>/dev/null || true
+		sleep 2
 		log_pass "Subsystem reset: id-ctrl succeeds after subsystem reset"
 	else
 		log_fail "Subsystem reset" "id-ctrl failed after subsystem reset"

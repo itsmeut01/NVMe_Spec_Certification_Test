@@ -194,7 +194,13 @@ detect_all_controllers() {
 		model=$(nvme id-ctrl "$ctrl" 2>/dev/null | grep "^mn " | sed 's/^mn *: *//' || echo "unknown")
 		serial=$(nvme id-ctrl "$ctrl" 2>/dev/null | grep "^sn " | sed 's/^sn *: *//' || echo "unknown")
 		if is_os_drive "$ctrl"; then
-			echo -e "  ${YELLOW}SKIP${RESET}  ${ctrl}  ${model}  (SN: ${serial})  [OS drive]"
+			local skip_reason="mounted filesystem"
+			local root_dev
+			root_dev=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+			if [ -n "$root_dev" ] && echo "$root_dev" | grep -qw "$(basename "$ctrl")"; then
+				skip_reason="OS root drive"
+			fi
+			echo -e "  ${YELLOW}SKIP${RESET}  ${ctrl}  ${model}  (SN: ${serial})  [${skip_reason}]"
 		else
 			echo -e "  ${GREEN} OK ${RESET}  ${ctrl}  ${model}  (SN: ${serial})"
 		fi
@@ -210,6 +216,36 @@ detect_all_controllers() {
 	echo -e "${BOLD}Testing ${#safe_ctrls[@]} drive(s), skipping ${#skipped_ctrls[@]} OS drive(s)${RESET}"
 
 	DETECTED_CONTROLLERS=("${safe_ctrls[@]}")
+}
+
+# --------------------------------------------------------------------------
+# Device health check and recovery
+# --------------------------------------------------------------------------
+
+recover_device() {
+	local ctrl="$1"
+	if [ -e "$ctrl" ]; then
+		nvme ns-rescan "$ctrl" 2>/dev/null || true
+		sleep 1
+		return 0
+	fi
+
+	echo -e "  ${YELLOW}RECOVERING${RESET}  ${ctrl} disappeared — triggering PCI rescan..."
+	echo 1 > /sys/bus/pci/rescan 2>/dev/null || true
+	local waited=0
+	while [ "$waited" -lt 30 ]; do
+		if [ -e "$ctrl" ]; then
+			nvme ns-rescan "$ctrl" 2>/dev/null || true
+			sleep 2
+			echo -e "  ${GREEN}RECOVERED${RESET}  ${ctrl} is back"
+			return 0
+		fi
+		sleep 2
+		waited=$((waited + 2))
+	done
+
+	echo -e "  ${RED}UNRECOVERABLE${RESET}  ${ctrl} did not come back after 30s"
+	return 1
 }
 
 # --------------------------------------------------------------------------
@@ -407,14 +443,27 @@ run_suites_for_device() {
 			run_suite "Firmware Management" \
 				"nvme_fw_mgmt_test/nvme_fw_mgmt_verify.sh" "$ctrl" --allow-destructive
 
-			run_suite "Additional I/O" \
-				"nvme_additional_io_test/nvme_additional_io_verify.sh" "$ctrl" --allow-destructive
+			if ! recover_device "$ctrl"; then
+				echo -e "  ${RED}SKIP${RESET}  Remaining suites — controller ${ctrl} unrecoverable after reset/fw-mgmt"
+				for _skip_name in "Additional I/O" "Security & Directives" "Advanced Admin"; do
+					TOTAL_SUITES=$((TOTAL_SUITES + 1))
+					FAILED_SUITES=$((FAILED_SUITES + 1))
+					SUITE_RESULTS+=("$(printf "  ${RED}FAIL${RESET}  Suite %d: %s (controller lost)" "$TOTAL_SUITES" "$_skip_name")")
+				done
+			else
+				ns=$(ls -1 "${ctrl}n"* 2>/dev/null | grep -E "^${ctrl}n[0-9]+$" | head -1 || true)
+			fi
 
-			run_suite "Security & Directives" \
-				"nvme_security_directives_test/nvme_security_directives_verify.sh" "$ctrl" --allow-destructive
+			if [ -e "$ctrl" ] && [ -n "$ns" ]; then
+				run_suite "Additional I/O" \
+					"nvme_additional_io_test/nvme_additional_io_verify.sh" "$ctrl" --allow-destructive
 
-			run_suite "Advanced Admin" \
-				"nvme_advanced_admin_test/nvme_advanced_admin_verify.sh" "$ctrl" --allow-destructive
+				run_suite "Security & Directives" \
+					"nvme_security_directives_test/nvme_security_directives_verify.sh" "$ctrl" --allow-destructive
+
+				run_suite "Advanced Admin" \
+					"nvme_advanced_admin_test/nvme_advanced_admin_verify.sh" "$ctrl" --allow-destructive
+			fi
 		else
 			echo ""
 			echo -e "  ${YELLOW}SKIP${RESET}  Destructive suites — no namespace device found for ${ctrl}"

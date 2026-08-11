@@ -219,24 +219,27 @@ is_os_drive() {
 	if [ -n "$root_src" ]; then
 		local root_real
 		root_real=$(readlink -f "$root_src" 2>/dev/null || echo "$root_src")
-		if echo "$root_real" | grep -q "$ctrl_base"; then
+		if echo "$root_real" | grep -qw "$ctrl_base"; then
 			return 0
 		fi
 	fi
 
 	local boot_src
 	boot_src=$(findmnt -n -o SOURCE /boot 2>/dev/null || true)
-	if [ -n "$boot_src" ] && echo "$boot_src" | grep -q "$ctrl_base"; then
+	if [ -n "$boot_src" ] && echo "$boot_src" | grep -qw "$ctrl_base"; then
 		return 0
 	fi
 
 	local efi_src
 	efi_src=$(findmnt -n -o SOURCE /boot/efi 2>/dev/null || true)
-	if [ -n "$efi_src" ] && echo "$efi_src" | grep -q "$ctrl_base"; then
+	if [ -n "$efi_src" ] && echo "$efi_src" | grep -qw "$ctrl_base"; then
 		return 0
 	fi
 
-	if lsblk -n -o MOUNTPOINTS "/dev/${ctrl_base}"* 2>/dev/null | grep -q "/"; then
+	# Any mounted partition on this controller — refuse testing
+	local mounts
+	mounts=$(lsblk -n -o MOUNTPOINTS "/dev/${ctrl_base}"* 2>/dev/null | grep -v "^$" || true)
+	if [ -n "$mounts" ]; then
 		return 0
 	fi
 

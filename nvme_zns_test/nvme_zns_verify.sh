@@ -569,18 +569,21 @@ main() {
 	fi
 
 	# Early ZNS detection — skip entire suite if not ZNS
-	local zns_probe
-	zns_probe=$(nvme zns id-ns "$NS_DEV" 2>&1) || true
-	if echo "$zns_probe" | grep -qi "invalid\|not support\|unknown\|not a zns"; then
-		local csi_check
-		csi_check=$(nvme ns-descs "$NS_DEV" 2>&1) || true
-		local csi_val=""
-		if echo "$csi_check" | grep -qi "csi"; then
-			csi_val=$(echo "$csi_check" | grep -i "csi" | head -1 | grep -oP '0x[0-9a-fA-F]+' | head -1 || true)
-		fi
-		if [ -z "$csi_val" ] || [ "$((csi_val))" -ne 2 ]; then
+	local csi_check
+	csi_check=$(nvme ns-descs "$NS_DEV" 2>&1) || true
+	local csi_val=""
+	if echo "$csi_check" | grep -qi "csi"; then
+		csi_val=$(echo "$csi_check" | grep -i "csi" | head -1 | grep -oP '0x[0-9a-fA-F]+' | head -1 || true)
+	fi
+
+	if [ -n "$csi_val" ] && [ "$((csi_val))" -eq 2 ]; then
+		: # ZNS confirmed via CSI
+	else
+		local zns_ctrl_probe
+		zns_ctrl_probe=$(nvme zns id-ctrl "$CTRL_DEV" 2>&1) || true
+		if ! echo "$zns_ctrl_probe" | grep -qi "zasl"; then
 			echo -e "${YELLOW}SKIP: ${NS_DEV} is not a ZNS namespace — skipping entire suite.${RESET}"
-			echo -e "  (CSI=${csi_val:-unknown}, zns id-ns not supported)"
+			echo -e "  (CSI=${csi_val:-unknown}, zns id-ctrl has no zasl field)"
 			exit 0
 		fi
 	fi
