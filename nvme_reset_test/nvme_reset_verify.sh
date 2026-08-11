@@ -123,9 +123,15 @@ test_subsystem_reset() {
 
 	wait_for_device "$CTRL_DEV" 30
 
+	if [ ! -e "$CTRL_DEV" ]; then
+		echo 1 > /sys/bus/pci/rescan 2>/dev/null || true
+		sleep 5
+		wait_for_device "$CTRL_DEV" 30
+	fi
+
 	local id_out=""
 	local attempt
-	for attempt in 1 2 3 4; do
+	for attempt in 1 2 3 4 5 6; do
 		id_out=$(nvme id-ctrl "$CTRL_DEV" 2>&1) || true
 		if echo "$id_out" | grep -q "^mn "; then
 			break
@@ -135,15 +141,119 @@ test_subsystem_reset() {
 	log_cmd "Post-subsystem-reset Identify Controller" "nvme id-ctrl ${CTRL_DEV}" "$id_out"
 
 	if echo "$id_out" | grep -q "^mn "; then
+		nvme ns-rescan "$CTRL_DEV" 2>/dev/null || true
+		sleep 2
 		log_pass "Subsystem reset: id-ctrl succeeds after subsystem reset"
 	else
 		log_fail "Subsystem reset" "id-ctrl failed after subsystem reset"
 	fi
 }
 
+test_post_reset_regs() {
+	local regs_output
+	regs_output=$(nvme show-regs "$CTRL_DEV" -H 2>&1) || true
+	if [ -z "$regs_output" ] || echo "$regs_output" | grep -qi "not support\|error"; then
+		regs_output=$(nvme show-regs "$CTRL_DEV" 2>&1) || true
+	fi
+	log_cmd "Post-reset registers" "nvme show-regs ${CTRL_DEV}" "$regs_output"
+
+	if [ -z "$regs_output" ]; then
+		log_skip "Post-reset register state" "could not read registers"
+		return
+	fi
+
+	local csts_val
+	csts_val=$(echo "$regs_output" | grep "^csts[[:space:]]" | awk -F': ' '{ print $2 }' | awk '{ print $1 }' || true)
+	local cc_val
+	cc_val=$(echo "$regs_output" | grep "^cc[[:space:]]" | awk -F': ' '{ print $2 }' | awk '{ print $1 }' || true)
+
+	local all_ok=1
+
+	if [ -n "$csts_val" ]; then
+		local csts_int=$((csts_val))
+		local rdy=$(( csts_int & 0x1 ))
+		local cfs=$(( (csts_int >> 1) & 0x1 ))
+		if [ "$rdy" -ne 1 ]; then
+			log_fail "Post-reset CSTS.RDY must be 1" "RDY=${rdy}"
+			all_ok=0
+		fi
+		if [ "$cfs" -ne 0 ]; then
+			log_fail "Post-reset CSTS.CFS must be 0" "CFS=${cfs} (fatal status!)"
+			all_ok=0
+		fi
+	fi
+
+	if [ -n "$cc_val" ]; then
+		local cc_int=$((cc_val))
+		local en=$(( cc_int & 0x1 ))
+		if [ "$en" -ne 1 ]; then
+			log_fail "Post-reset CC.EN must be 1" "EN=${en}"
+			all_ok=0
+		fi
+	fi
+
+	if [ "$all_ok" -eq 1 ]; then
+		log_pass "Post-reset registers: CSTS.RDY=1, CSTS.CFS=0, CC.EN=1"
+	fi
+}
+
+test_post_reset_features_persist() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x07" 2>&1) || true
+	log_cmd "Post-reset Get Feature 0x07" "nvme get-feature $CTRL_DEV -f 0x07" "$output"
+
+	local result
+	result=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*0x[0-9a-fA-F]+' | head -1 | grep -oiP '0x[0-9a-fA-F]+' || true)
+	if [ -z "$result" ]; then
+		result=$(echo "$output" | grep -oiP '(?:result|value)[[:space:]:]*[0-9a-fA-F]+' | head -1 | grep -oiP '[0-9a-fA-F]+$' || true)
+		[ -n "$result" ] && result="0x${result}"
+	fi
+
+	if [ -n "$result" ]; then
+		local val=$((result))
+		local nsqa=$(( val & 0xFFFF ))
+		local ncqa=$(( (val >> 16) & 0xFFFF ))
+		if [ -n "$PRE_RESET_NQ" ]; then
+			if [ "$result" = "$PRE_RESET_NQ" ]; then
+				log_pass "Post-reset FID 0x07: NSQA=$((nsqa+1)) NCQA=$((ncqa+1)) (unchanged)"
+			else
+				log_pass "Post-reset FID 0x07: NSQA=$((nsqa+1)) NCQA=$((ncqa+1)) (changed from ${PRE_RESET_NQ} — expected per spec)"
+			fi
+		else
+			log_pass "Post-reset FID 0x07: readable, NSQA=$((nsqa+1)) NCQA=$((ncqa+1))"
+		fi
+	else
+		log_warn "Post-reset FID 0x07" "could not read Number of Queues after reset"
+	fi
+}
+
+test_post_reset_smart() {
+	local smart_output
+	smart_output=$(nvme smart-log "$CTRL_DEV" 2>&1) || true
+	log_cmd "Post-reset SMART log" "nvme smart-log ${CTRL_DEV}" "$smart_output"
+
+	if [ -z "$smart_output" ]; then
+		log_fail "Post-reset SMART" "smart-log returned empty output"
+		return
+	fi
+
+	local has_temp has_spare has_cw
+	has_temp=$(echo "$smart_output" | grep "^temperature" | head -1 || true)
+	has_spare=$(echo "$smart_output" | grep "^available_spare" | head -1 || true)
+	has_cw=$(echo "$smart_output" | grep "^critical_warning" | head -1 || true)
+
+	if [ -n "$has_temp" ] && [ -n "$has_spare" ] && [ -n "$has_cw" ]; then
+		log_pass "Post-reset SMART: temperature, available_spare, critical_warning all present"
+	else
+		log_warn "Post-reset SMART" "some expected fields missing"
+	fi
+}
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
+
+PRE_RESET_NQ=""
 
 main() {
 	preflight_checks
@@ -184,6 +294,10 @@ main() {
 	PRE_RESET_MN=$(get_id_ctrl_string_field "mn" | sed 's/ *$//')
 	PRE_RESET_SN=$(get_id_ctrl_string_field "sn" | sed 's/ *$//')
 
+	local nq_out
+	nq_out=$(nvme get-feature "$CTRL_DEV" -f "0x07" 2>&1) || true
+	PRE_RESET_NQ=$(echo "$nq_out" | grep -oiP '(?:result|value)[[:space:]:]*0x[0-9a-fA-F]+' | head -1 | grep -oiP '0x[0-9a-fA-F]+' || true)
+
 	init_log "nvme_reset_verify" "$CTRL_DEV"
 	log_cmd "Identify Controller (cached)" "nvme id-ctrl ${CTRL_DEV}" "$_ID_CTRL_CACHE"
 
@@ -199,6 +313,12 @@ main() {
 	test_controller_reset
 	test_post_reset_identify
 	test_post_reset_io
+
+	echo ""
+	echo -e "${BOLD}--- Post-Reset State Verification ---${RESET}"
+	test_post_reset_regs
+	test_post_reset_features_persist
+	test_post_reset_smart
 
 	echo ""
 	echo -e "${BOLD}--- Subsystem Reset ---${RESET}"

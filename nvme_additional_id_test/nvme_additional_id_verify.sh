@@ -136,23 +136,106 @@ test_id_uuid() {
 	fi
 }
 
+NVM_ID_CTRL_OUTPUT=""
+
 test_nvm_id_ctrl() {
 	if ! ver_at_least 2 0; then
 		log_skip "NVM Command Set ID Controller" "requires NVMe 2.0+"
 		return
 	fi
 
-	local output
-	output=$(nvme nvm-id-ctrl "$CTRL_DEV" 2>&1) || true
-	log_cmd "NVM ID Ctrl" "nvme nvm-id-ctrl ${CTRL_DEV}" "$output"
+	NVM_ID_CTRL_OUTPUT=$(nvme nvm-id-ctrl "$CTRL_DEV" 2>&1) || true
+	log_cmd "NVM ID Ctrl" "nvme nvm-id-ctrl ${CTRL_DEV}" "$NVM_ID_CTRL_OUTPUT"
 
-	if echo "$output" | grep -qi "vsl\|wzsl\|wusl\|dmrl\|dmrsl"; then
-		log_pass "NVM ID Ctrl: VSL/WZSL/WUSL/DMRL fields present"
-	elif echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
-		log_skip "NVM Command Set ID Controller" "$(echo "$output" | head -1)"
+	if echo "$NVM_ID_CTRL_OUTPUT" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "NVM Command Set ID Controller" "$(echo "$NVM_ID_CTRL_OUTPUT" | head -1)"
+		return
+	fi
+
+	local fields_found=0
+	local fields_list=""
+	local field
+	for field in vsl wzsl wusl dmrl dmrsl dmsl; do
+		if echo "$NVM_ID_CTRL_OUTPUT" | grep -qi "^${field}"; then
+			fields_found=$((fields_found + 1))
+			fields_list="${fields_list} ${field}"
+		fi
+	done
+	if [ "$fields_found" -ge 3 ]; then
+		log_pass "NVM ID Ctrl: ${fields_found} key fields present (${fields_list# })"
 	else
 		log_pass "NVM Command Set ID Controller: command completed"
 	fi
+}
+
+test_nvm_id_ctrl_ver() {
+	if ! ver_at_least 2 0; then
+		log_skip "NVM CS Version" "requires NVMe 2.0+"
+		return
+	fi
+	if [ -z "$NVM_ID_CTRL_OUTPUT" ]; then
+		log_skip "NVM CS Version" "nvm-id-ctrl not available"
+		return
+	fi
+	local ver_val
+	ver_val=$(echo "$NVM_ID_CTRL_OUTPUT" | grep -i "^ver" | awk -F: '{print $2}' | tr -d ' ' | head -1)
+	if [ -z "$ver_val" ]; then
+		log_skip "NVM CS Version" "ver field not found in output"
+		return
+	fi
+	local ver_int=$((ver_val))
+	local major=$(( (ver_int >> 16) & 0xFF ))
+	local minor=$(( (ver_int >> 8) & 0xFF ))
+	if [ "$major" -ge 1 ]; then
+		log_pass "NVM Command Set version: ${major}.${minor} (raw=${ver_val})"
+	else
+		log_pass "NVM Command Set version: ${ver_val}"
+	fi
+}
+
+test_nvm_id_ctrl_kpiocap() {
+	if ! ver_at_least 2 0; then
+		log_skip "NVM CS kpiocap (PI Capabilities)" "requires NVMe 2.0+"
+		return
+	fi
+	if [ -z "$NVM_ID_CTRL_OUTPUT" ]; then
+		log_skip "NVM CS kpiocap" "nvm-id-ctrl not available"
+		return
+	fi
+	local kp_val
+	kp_val=$(echo "$NVM_ID_CTRL_OUTPUT" | grep -i "^kpiocap" | awk -F: '{print $2}' | tr -d ' ' | head -1)
+	if [ -z "$kp_val" ]; then
+		log_skip "NVM CS kpiocap" "field not found in output"
+		return
+	fi
+	local kp_int=$((kp_val))
+	local crc64=$(( (kp_int >> 3) & 0x1 ))
+	local summary="kpiocap=0x$(printf '%02x' "$kp_int")"
+	if [ "$crc64" -eq 1 ]; then
+		summary="${summary}, 64-bit Guard PI (CRC-64) supported"
+	fi
+	log_pass "NVM CS PI Capabilities: ${summary}"
+}
+
+test_nvm_id_ctrl_copy_fields() {
+	if ! ver_at_least 2 0; then
+		log_skip "NVM CS Copy Command fields" "requires NVMe 2.0+"
+		return
+	fi
+	if [ -z "$NVM_ID_CTRL_OUTPUT" ]; then
+		log_skip "NVM CS Copy Command fields" "nvm-id-ctrl not available"
+		return
+	fi
+	local dmrl dmrsl dmsl
+	dmrl=$(echo "$NVM_ID_CTRL_OUTPUT" | grep -i "^dmrl" | awk -F: '{print $2}' | tr -d ' ' | head -1)
+	dmrsl=$(echo "$NVM_ID_CTRL_OUTPUT" | grep -i "^dmrsl" | awk -F: '{print $2}' | tr -d ' ' | head -1)
+	dmsl=$(echo "$NVM_ID_CTRL_OUTPUT" | grep -i "^dmsl" | awk -F: '{print $2}' | tr -d ' ' | head -1)
+	if [ -z "$dmrl" ] && [ -z "$dmrsl" ]; then
+		log_skip "NVM CS Copy Command fields" "dmrl/dmrsl not found"
+		return
+	fi
+	local summary="DMRL=${dmrl:-?} DMRSL=${dmrsl:-?} DMSL=${dmsl:-?}"
+	log_pass "Copy Command limits: ${summary}"
 }
 
 test_nvm_id_ns() {
@@ -170,10 +253,20 @@ test_nvm_id_ns() {
 	output=$(nvme nvm-id-ns "$NS_DEV" 2>&1) || true
 	log_cmd "NVM ID NS" "nvme nvm-id-ns ${NS_DEV}" "$output"
 
-	if echo "$output" | grep -qi "lbstm\|elbaf\|pid"; then
-		log_pass "NVM ID NS: LBSTM/ELBAF fields present"
-	elif echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
 		log_skip "NVM Command Set ID Namespace" "$(echo "$output" | head -1)"
+		return
+	fi
+
+	local fields_found=0
+	local field
+	for field in lbstm elbaf pic pid; do
+		if echo "$output" | grep -qi "^${field}\|${field}"; then
+			fields_found=$((fields_found + 1))
+		fi
+	done
+	if [ "$fields_found" -ge 1 ]; then
+		log_pass "NVM ID NS: ${fields_found} NVM CS fields present (lbstm, elbaf, pic, pid)"
 	else
 		log_pass "NVM Command Set ID Namespace: command completed"
 	fi
@@ -394,6 +487,9 @@ main() {
 	echo -e "${BOLD}--- Extended Identify Structures ---${RESET}"
 	test_id_uuid
 	test_nvm_id_ctrl
+	test_nvm_id_ctrl_ver
+	test_nvm_id_ctrl_kpiocap
+	test_nvm_id_ctrl_copy_fields
 	test_nvm_id_ns
 	test_cmdset_ind_id_ns
 

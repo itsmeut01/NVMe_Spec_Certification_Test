@@ -818,6 +818,149 @@ test_nq_restore() {
 }
 
 # --------------------------------------------------------------------------
+# Async Event Configuration (FID 0x0B) — 4 tests
+# --------------------------------------------------------------------------
+
+test_aec_save() {
+	save_feature "0x0b" "$CTRL_DEV" >/dev/null
+	if [ -n "${_SAVED_FEATURES[0x0b]:-}" ]; then
+		log_pass "AEC: saved current config (${_SAVED_FEATURES[0x0b]})"
+	else
+		log_skip "AEC: save current" "could not read FID 0x0B"
+	fi
+}
+
+test_aec_set_smart_events() {
+	if [ -z "${_SAVED_FEATURES[0x0b]:-}" ]; then
+		log_skip "AEC: enable all SMART events" "no saved value"
+		return
+	fi
+	local new_val=0x1F
+	set_feature "0x0b" "$new_val" "$CTRL_DEV" >/dev/null
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0b" 2>&1) || true
+	log_cmd "AEC: Get Feature 0x0B readback" "nvme get-feature $CTRL_DEV -f 0x0b" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -n "$result" ]; then
+		local val=$((result))
+		local smart_bits=$(( val & 0x1F ))
+		if [ "$smart_bits" -eq 31 ]; then
+			log_pass "AEC: all SMART critical warning events enabled (bits 4:0 = 0x1F)"
+		else
+			log_pass "AEC: set SMART events, readback=0x$(printf '%x' "$val") (controller may mask unsupported bits)"
+		fi
+	else
+		log_warn "AEC: enable SMART events" "could not read back"
+	fi
+}
+
+test_aec_set_minimal() {
+	if [ -z "${_SAVED_FEATURES[0x0b]:-}" ]; then
+		log_skip "AEC: disable optional events" "no saved value"
+		return
+	fi
+	set_feature "0x0b" "0" "$CTRL_DEV" >/dev/null
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0b" 2>&1) || true
+	log_cmd "AEC: Get Feature 0x0B readback (minimal)" "nvme get-feature $CTRL_DEV -f 0x0b" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -n "$result" ]; then
+		log_pass "AEC: set minimal events, readback=0x$(printf '%x' "$((result))")"
+	else
+		log_warn "AEC: disable optional events" "could not read back"
+	fi
+}
+
+test_aec_restore() {
+	if [ -z "${_SAVED_FEATURES[0x0b]:-}" ]; then
+		log_skip "AEC: restore original" "no saved value"
+		return
+	fi
+	local saved="${_SAVED_FEATURES[0x0b]}"
+	restore_feature "0x0b" "$CTRL_DEV"
+	if verify_feature "0x0b" "$saved" "$CTRL_DEV"; then
+		log_pass "AEC: restored original config=${saved}"
+	else
+		log_warn "AEC: restore" "readback mismatch"
+	fi
+}
+
+# --------------------------------------------------------------------------
+# Keep Alive Timer (FID 0x0F) — 4 tests
+# --------------------------------------------------------------------------
+
+_kat_supported() {
+	local kas
+	kas=$(get_id_ctrl_field "kas")
+	[ -n "$kas" ] && [ "$((kas))" -gt 0 ]
+}
+
+test_kat_save() {
+	if ! _kat_supported; then
+		log_skip "KAT: save current" "Keep Alive not supported (KAS=0)"
+		return
+	fi
+	save_feature "0x0f" "$CTRL_DEV" >/dev/null
+	if [ -n "${_SAVED_FEATURES[0x0f]:-}" ]; then
+		log_pass "KAT: saved current KATO (${_SAVED_FEATURES[0x0f]})"
+	else
+		log_skip "KAT: save current" "could not read FID 0x0F"
+	fi
+}
+
+test_kat_set_value() {
+	if [ -z "${_SAVED_FEATURES[0x0f]:-}" ]; then
+		log_skip "KAT: set KATO=30000ms" "no saved value"
+		return
+	fi
+	set_feature "0x0f" "30000" "$CTRL_DEV" >/dev/null
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0f" 2>&1) || true
+	log_cmd "KAT: Get Feature 0x0F readback" "nvme get-feature $CTRL_DEV -f 0x0f" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -n "$result" ]; then
+		log_pass "KAT: set KATO=30000ms, readback=$((result))ms"
+	else
+		log_warn "KAT: set KATO" "could not read back"
+	fi
+}
+
+test_kat_set_zero() {
+	if [ -z "${_SAVED_FEATURES[0x0f]:-}" ]; then
+		log_skip "KAT: set KATO=0" "no saved value"
+		return
+	fi
+	set_feature "0x0f" "0" "$CTRL_DEV" >/dev/null
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0f" 2>&1) || true
+	log_cmd "KAT: Get Feature 0x0F readback (zero)" "nvme get-feature $CTRL_DEV -f 0x0f" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -n "$result" ]; then
+		log_pass "KAT: set KATO=0 (disabled), readback=$((result))"
+	else
+		log_warn "KAT: set zero" "could not read back"
+	fi
+}
+
+test_kat_restore() {
+	if [ -z "${_SAVED_FEATURES[0x0f]:-}" ]; then
+		log_skip "KAT: restore original" "no saved value"
+		return
+	fi
+	local saved="${_SAVED_FEATURES[0x0f]}"
+	restore_feature "0x0f" "$CTRL_DEV"
+	if verify_feature "0x0f" "$saved" "$CTRL_DEV"; then
+		log_pass "KAT: restored original KATO=${saved}"
+	else
+		log_warn "KAT: restore" "readback mismatch"
+	fi
+}
+
+# --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
 
@@ -955,6 +1098,20 @@ main() {
 	test_nq_set_value
 	test_nq_io_after
 	test_nq_restore
+
+	echo ""
+	echo -e "${BOLD}--- Async Event Configuration (FID 0x0B) ---${RESET}"
+	test_aec_save
+	test_aec_set_smart_events
+	test_aec_set_minimal
+	test_aec_restore
+
+	echo ""
+	echo -e "${BOLD}--- Keep Alive Timer (FID 0x0F) ---${RESET}"
+	test_kat_save
+	test_kat_set_value
+	test_kat_set_zero
+	test_kat_restore
 
 	print_summary
 

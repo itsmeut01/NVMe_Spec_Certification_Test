@@ -275,12 +275,37 @@ test_fid_support_effects_log() {
 	output=$(nvme fid-support-effects-log "$CTRL_DEV" 2>&1) || true
 	log_cmd "FID Support Effects Log" "nvme fid-support-effects-log ${CTRL_DEV}" "$output"
 
-	if echo "$output" | grep -qi "fid\|support\|effect"; then
-		log_pass "FID Support and Effects Log: per-FID entries present"
-	elif echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
 		log_skip "FID Support and Effects Log" "$(echo "$output" | head -1)"
+		return
+	fi
+
+	if [ -z "$output" ]; then
+		log_fail "FID Support and Effects Log" "empty output"
+		return
+	fi
+
+	local missing=""
+	local checked=0
+	local fid_01 fid_02 fid_04 fid_07 fid_0b
+	fid_01=$(echo "$output" | grep -ci "FID.*0x01\|FID.*01h\|Arbitration" || true)
+	fid_02=$(echo "$output" | grep -ci "FID.*0x02\|FID.*02h\|Power Management" || true)
+	fid_04=$(echo "$output" | grep -ci "FID.*0x04\|FID.*04h\|Temperature Threshold" || true)
+	fid_07=$(echo "$output" | grep -ci "FID.*0x07\|FID.*07h\|Number of Queues" || true)
+	fid_0b=$(echo "$output" | grep -ci "FID.*0x0[bB]\|FID.*0Bh\|Async.*Event.*Config" || true)
+
+	[ "$fid_01" -eq 0 ] && missing="${missing} 0x01(Arbitration)" && checked=$((checked + 1))
+	[ "$fid_02" -eq 0 ] && missing="${missing} 0x02(PM)" && checked=$((checked + 1))
+	[ "$fid_04" -eq 0 ] && missing="${missing} 0x04(TempThresh)" && checked=$((checked + 1))
+	[ "$fid_07" -eq 0 ] && missing="${missing} 0x07(NumQueues)" && checked=$((checked + 1))
+	[ "$fid_0b" -eq 0 ] && missing="${missing} 0x0B(AEC)" && checked=$((checked + 1))
+
+	if [ "$checked" -eq 0 ]; then
+		log_pass "FID Support and Effects Log: all 5 mandatory FIDs present (0x01,0x02,0x04,0x07,0x0B)"
+	elif [ "$checked" -le 2 ]; then
+		log_warn "FID Support Effects: missing mandatory FIDs" "${missing}"
 	else
-		log_pass "FID Support and Effects Log: command completed"
+		log_warn "FID Support Effects: output format may not match expected patterns" "checked 5 mandatory FIDs, ${checked} not found:${missing}"
 	fi
 }
 
@@ -314,7 +339,11 @@ test_predictable_lat_log() {
 	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
 		log_skip "Predictable Latency Per NVM Set" "$(echo "$output" | head -1)"
 	else
-		log_pass "Predictable Latency Per NVM Set: accessible"
+		local note=""
+		if ver_at_least 2 4; then
+			note=" (note: deprecated in NVMe 2.4, removal planned August 2027)"
+		fi
+		log_pass "Predictable Latency Per NVM Set: accessible${note}"
 	fi
 }
 
@@ -349,6 +378,120 @@ test_endurance_event_agg_log() {
 		log_skip "Endurance Group Event Agg Log" "$(echo "$output" | head -1)"
 	else
 		log_pass "Endurance Group Event Agg Log: accessible"
+	fi
+}
+
+test_power_measurement_log() {
+	if ! ver_at_least 2 4; then
+		log_skip "Power Measurement Log (LID 0x17)" "requires NVMe 2.4+"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x17 -l 512 2>&1) || true
+	log_cmd "Power Measurement Log" "nvme get-log ${CTRL_DEV} -i 0x17 -l 512" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Power Measurement Log (LID 0x17)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Power Measurement Log (LID 0x17)" "empty output"
+	else
+		log_pass "Power Measurement Log (LID 0x17): accessible"
+	fi
+}
+
+test_voltage_measurement_log() {
+	if ! ver_at_least 2 4; then
+		log_skip "Voltage Measurement Log (LID 0x18)" "requires NVMe 2.4+"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x18 -l 512 2>&1) || true
+	log_cmd "Voltage Measurement Log" "nvme get-log ${CTRL_DEV} -i 0x18 -l 512" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Voltage Measurement Log (LID 0x18)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Voltage Measurement Log (LID 0x18)" "empty output"
+	else
+		log_pass "Voltage Measurement Log (LID 0x18): accessible"
+	fi
+}
+
+test_cross_controller_reset_log() {
+	if ! ver_at_least 2 4; then
+		log_skip "Cross-Controller Reset Log (LID 0x1E)" "requires NVMe 2.4+"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x1E -l 512 2>&1) || true
+	log_cmd "Cross-Controller Reset Log" "nvme get-log ${CTRL_DEV} -i 0x1E -l 512" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Cross-Controller Reset Log (LID 0x1E)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Cross-Controller Reset Log (LID 0x1E)" "empty output"
+	else
+		log_pass "Cross-Controller Reset Log (LID 0x1E): accessible"
+	fi
+}
+
+test_lost_host_comm_log() {
+	if ! ver_at_least 2 4; then
+		log_skip "Lost Host Communication Log (LID 0x1F)" "requires NVMe 2.4+"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x1F -l 512 2>&1) || true
+	log_cmd "Lost Host Communication Log" "nvme get-log ${CTRL_DEV} -i 0x1F -l 512" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Lost Host Communication Log (LID 0x1F)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Lost Host Communication Log (LID 0x1F)" "empty output"
+	else
+		log_pass "Lost Host Communication Log (LID 0x1F): accessible"
+	fi
+}
+
+test_rate_limiting_log() {
+	if ! ver_at_least 2 0; then
+		log_skip "Rate Limiting Log (LID 0x28)" "requires NVMe 2.0+ (NVM CS 1.3)"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x28 -l 4096 2>&1) || true
+	log_cmd "Rate Limiting Log" "nvme get-log ${CTRL_DEV} -i 0x28 -l 4096" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Rate Limiting Log (LID 0x28)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Rate Limiting Log (LID 0x28)" "empty output"
+	else
+		log_pass "Rate Limiting Log (LID 0x28): accessible (NVM CS 1.3)"
+	fi
+}
+
+test_eom_log() {
+	if ! ver_at_least 2 0; then
+		log_skip "Eye Opening Measurement Log (LID 0x19)" "requires NVMe 2.0+ (PCIe Transport 1.4)"
+		return
+	fi
+
+	local output
+	output=$(nvme get-log "$CTRL_DEV" -i 0x19 -l 4096 2>&1) || true
+	log_cmd "EOM Log" "nvme get-log ${CTRL_DEV} -i 0x19 -l 4096" "$output"
+
+	if echo "$output" | grep -qi "not support\|invalid\|NVMe status"; then
+		log_skip "Eye Opening Measurement Log (LID 0x19)" "not supported by controller"
+	elif [ -z "$output" ]; then
+		log_skip "Eye Opening Measurement Log (LID 0x19)" "empty output"
+	else
+		log_pass "Eye Opening Measurement Log (LID 0x19): accessible (PCIe Transport 1.4)"
 	fi
 }
 
@@ -413,6 +556,18 @@ main() {
 	test_predictable_lat_log
 	test_boot_partition_log
 	test_endurance_event_agg_log
+
+	echo ""
+	echo -e "${BOLD}--- NVM CS 1.3 / PCIe Transport 1.4 Log Pages ---${RESET}"
+	test_rate_limiting_log
+	test_eom_log
+
+	echo ""
+	echo -e "${BOLD}--- NVMe 2.4 Log Pages ---${RESET}"
+	test_power_measurement_log
+	test_voltage_measurement_log
+	test_cross_controller_reset_log
+	test_lost_host_comm_log
 
 	print_summary
 

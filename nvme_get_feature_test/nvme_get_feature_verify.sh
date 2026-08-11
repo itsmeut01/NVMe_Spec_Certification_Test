@@ -265,6 +265,230 @@ test_hctm() {
 	fi
 }
 
+test_interrupt_vector_config() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x09" 2>&1) || true
+	log_cmd "Get Feature: Interrupt Vector Configuration (FID 0x09)" "nvme get-feature ${CTRL_DEV} -f 0x09" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Interrupt Vector Configuration (FID 0x09)" "not supported"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Interrupt Vector Configuration (FID 0x09)" "could not parse result"
+		return
+	fi
+	local feat_val=$((result))
+	local cd_bit=$(( (feat_val >> 16) & 0x1 ))
+	log_pass "Interrupt Vector Configuration: CD=${cd_bit} (coalescing disable for vector 0)"
+}
+
+test_async_event_config() {
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0b" 2>&1) || true
+	log_cmd "Get Feature: Async Event Configuration (FID 0x0B)" "nvme get-feature ${CTRL_DEV} -f 0x0b" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_fail "Async Event Configuration (FID 0x0B) must be supported" "could not read mandatory feature"
+		return
+	fi
+	local feat_val=$((result))
+	local smart_cw=$(( feat_val & 0xFF ))
+	local ns_attr=$(( (feat_val >> 8) & 0x1 ))
+	local fw_act=$(( (feat_val >> 9) & 0x1 ))
+	log_pass "Async Event Configuration: SMART/CW=0x$(printf '%02x' "$smart_cw") NS_Attr=${ns_attr} FW_Act=${fw_act}"
+}
+
+test_keep_alive_timer() {
+	local kas
+	kas=$(get_id_ctrl_field "kas")
+	if [ -z "$kas" ] || [ "$((kas))" -eq 0 ]; then
+		log_skip "Keep Alive Timer (FID 0x0F)" "KAS=0 (not supported)"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x0f" 2>&1) || true
+	log_cmd "Get Feature: Keep Alive Timer (FID 0x0F)" "nvme get-feature ${CTRL_DEV} -f 0x0f" "$output"
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Keep Alive Timer (FID 0x0F)" "could not read feature"
+		return
+	fi
+	local kato=$((result))
+	log_pass "Keep Alive Timer: KATO=${kato} ms (KAS granularity=${kas})"
+}
+
+test_perf_characteristics() {
+	if ! ver_at_least 2 0; then
+		log_skip "Performance Characteristics (FID 0x1C)" "requires NVMe 2.0+ (NVM CS 1.3)"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x1c" 2>&1) || true
+	log_cmd "Get Feature: Performance Characteristics (FID 0x1C)" "nvme get-feature ${CTRL_DEV} -f 0x1c" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Performance Characteristics (FID 0x1C)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Performance Characteristics (FID 0x1C)" "could not parse result"
+		return
+	fi
+	log_pass "Performance Characteristics (FID 0x1C) readable (result=${result})"
+}
+
+test_cdp() {
+	if ! ver_at_least 2 4; then
+		log_skip "Configurable Device Personality (FID 0x22)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x22" 2>&1) || true
+	log_cmd "Get Feature: CDP (FID 0x22)" "nvme get-feature ${CTRL_DEV} -f 0x22" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Configurable Device Personality (FID 0x22)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Configurable Device Personality (FID 0x22)" "could not parse result"
+		return
+	fi
+	log_pass "Configurable Device Personality (FID 0x22) readable (result=${result})"
+}
+
+test_power_limit() {
+	if ! ver_at_least 2 4; then
+		log_skip "Power Limit (FID 0x23)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x23" 2>&1) || true
+	log_cmd "Get Feature: Power Limit (FID 0x23)" "nvme get-feature ${CTRL_DEV} -f 0x23" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Power Limit (FID 0x23)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Power Limit (FID 0x23)" "could not parse result"
+		return
+	fi
+	log_pass "Power Limit (FID 0x23) readable (result=${result})"
+}
+
+test_power_measurement() {
+	if ! ver_at_least 2 4; then
+		log_skip "Power Measurement (FID 0x25)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x25" 2>&1) || true
+	log_cmd "Get Feature: Power Measurement (FID 0x25)" "nvme get-feature ${CTRL_DEV} -f 0x25" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Power Measurement (FID 0x25)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Power Measurement (FID 0x25)" "could not parse result"
+		return
+	fi
+	log_pass "Power Measurement (FID 0x25) readable (result=${result})"
+}
+
+test_power_threshold() {
+	if ! ver_at_least 2 4; then
+		log_skip "Power Threshold (FID 0x24)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x24" 2>&1) || true
+	log_cmd "Get Feature: Power Threshold (FID 0x24)" "nvme get-feature ${CTRL_DEV} -f 0x24" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Power Threshold (FID 0x24)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Power Threshold (FID 0x24)" "could not parse result"
+		return
+	fi
+	log_pass "Power Threshold (FID 0x24) readable (result=${result})"
+}
+
+test_voltage_threshold() {
+	if ! ver_at_least 2 4; then
+		log_skip "Voltage Threshold (FID 0x26)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x26" 2>&1) || true
+	log_cmd "Get Feature: Voltage Threshold (FID 0x26)" "nvme get-feature ${CTRL_DEV} -f 0x26" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Voltage Threshold (FID 0x26)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Voltage Threshold (FID 0x26)" "could not parse result"
+		return
+	fi
+	log_pass "Voltage Threshold (FID 0x26) readable (result=${result})"
+}
+
+test_voltage_measurement() {
+	if ! ver_at_least 2 4; then
+		log_skip "Voltage Measurement (FID 0x27)" "requires NVMe 2.4+"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x27" 2>&1) || true
+	log_cmd "Get Feature: Voltage Measurement (FID 0x27)" "nvme get-feature ${CTRL_DEV} -f 0x27" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Voltage Measurement (FID 0x27)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Voltage Measurement (FID 0x27)" "could not parse result"
+		return
+	fi
+	log_pass "Voltage Measurement (FID 0x27) readable (result=${result})"
+}
+
+test_rate_limiting() {
+	if ! ver_at_least 2 0; then
+		log_skip "Rate Limiting (FID 0x28)" "requires NVMe 2.0+ (NVM CS 1.3)"
+		return
+	fi
+	local output
+	output=$(nvme get-feature "$CTRL_DEV" -f "0x28" 2>&1) || true
+	log_cmd "Get Feature: Rate Limiting (FID 0x28)" "nvme get-feature ${CTRL_DEV} -f 0x28" "$output"
+	if echo "$output" | grep -qi "not support\|invalid field\|invalid opcode"; then
+		log_skip "Rate Limiting (FID 0x28)" "not supported by controller"
+		return
+	fi
+	local result
+	result=$(extract_feature_result "$output")
+	if [ -z "$result" ]; then
+		log_skip "Rate Limiting (FID 0x28)" "could not parse result"
+		return
+	fi
+	log_pass "Rate Limiting (FID 0x28) readable (result=${result})"
+}
+
 test_feature_error_handling() {
 	local output
 	output=$(nvme get-feature "$CTRL_DEV" -f "0xFF" 2>&1) || true
@@ -329,6 +553,26 @@ main() {
 	test_arbitration
 	test_auto_pst
 	test_hctm
+
+	echo ""
+	echo -e "${BOLD}--- Interrupt, AER Config & Keep Alive ---${RESET}"
+	test_interrupt_vector_config
+	test_async_event_config
+	test_keep_alive_timer
+
+	echo ""
+	echo -e "${BOLD}--- NVM CS 1.3 Features (NVMe 2.0+) ---${RESET}"
+	test_perf_characteristics
+	test_rate_limiting
+
+	echo ""
+	echo -e "${BOLD}--- NVMe 2.4 Power & Voltage Features ---${RESET}"
+	test_cdp
+	test_power_limit
+	test_power_threshold
+	test_power_measurement
+	test_voltage_threshold
+	test_voltage_measurement
 
 	echo ""
 	echo -e "${BOLD}--- Error Handling ---${RESET}"

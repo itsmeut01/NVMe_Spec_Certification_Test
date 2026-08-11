@@ -201,6 +201,76 @@ test_cap_css() {
 	fi
 }
 
+test_cap_to() {
+	local cap_val
+	cap_val=$(regs_get_value "cap")
+	if [ -z "$cap_val" ]; then
+		log_skip "CAP.TO (Timeout) check" "could not read CAP register"
+		return
+	fi
+	local cap_int=$((cap_val))
+	local to=$(( (cap_int >> 24) & 0xFF ))
+	if [ "$to" -gt 0 ]; then
+		local timeout_ms=$((to * 500))
+		log_pass "CAP.TO: worst-case ready timeout = ${to} (${timeout_ms} ms)"
+	else
+		log_fail "CAP.TO must be non-zero" "TO=0 (spec violation: controller shall set this field)"
+	fi
+}
+
+test_cap_crms() {
+	if ! ver_at_least 2 0; then
+		log_skip "CAP.CRMS (Controller Ready Modes)" "requires NVMe 2.0+"
+		return
+	fi
+	local cap_val
+	cap_val=$(regs_get_value "cap")
+	if [ -z "$cap_val" ]; then
+		log_skip "CAP.CRMS check" "could not read CAP register"
+		return
+	fi
+	local cap_int=$((cap_val))
+	local crwms=$(( (cap_int >> 58) & 0x1 ))
+	local crims=$(( (cap_int >> 59) & 0x1 ))
+	if [ "$crwms" -eq 1 ]; then
+		log_pass "CAP.CRMS: CRWMS=1 (Controller Ready With Media supported), CRIMS=${crims}"
+	else
+		log_warn "CAP.CRMS" "CRWMS=0 (spec 2.0+ says shall be 1)"
+	fi
+}
+
+test_crto() {
+	if ! ver_at_least 2 0; then
+		log_skip "CRTO (Controller Ready Timeouts)" "requires NVMe 2.0+"
+		return
+	fi
+	local crto_val
+	crto_val=$(regs_get_value "crto")
+	if [ -z "$crto_val" ]; then
+		local crto_line
+		crto_line=$(regs_get_human_line "CRTO\|Controller Ready Timeout")
+		if [ -z "$crto_line" ]; then
+			log_skip "CRTO check" "CRTO register not found in show-regs output"
+			return
+		fi
+		crto_val=$(echo "$crto_line" | grep -oP '0x[0-9a-fA-F]+' | head -1 || true)
+		if [ -z "$crto_val" ]; then
+			log_skip "CRTO check" "could not parse CRTO value"
+			return
+		fi
+	fi
+	local crto_int=$((crto_val))
+	local crwmt=$(( crto_int & 0xFFFF ))
+	local crimt=$(( (crto_int >> 16) & 0xFFFF ))
+	local crwmt_ms=$((crwmt * 500))
+	local crimt_ms=$((crimt * 500))
+	if [ "$crwmt" -gt 0 ]; then
+		log_pass "CRTO: CRWMT=${crwmt} (${crwmt_ms} ms), CRIMT=${crimt} (${crimt_ms} ms)"
+	else
+		log_warn "CRTO" "CRWMT=0 (expected non-zero for Controller Ready With Media timeout)"
+	fi
+}
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
@@ -267,6 +337,12 @@ main() {
 	echo -e "${BOLD}--- Controller Capabilities (CAP) ---${RESET}"
 	test_cap_mqes
 	test_cap_css
+	test_cap_to
+	test_cap_crms
+
+	echo ""
+	echo -e "${BOLD}--- Controller Ready Timeouts (NVMe 2.0+) ---${RESET}"
+	test_crto
 
 	echo ""
 	echo -e "${BOLD}--- Version Register ---${RESET}"
