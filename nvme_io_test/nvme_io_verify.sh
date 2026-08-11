@@ -22,17 +22,7 @@ ALLOW_DESTRUCTIVE=""
 BLOCK_SIZE=512
 
 detect_block_size() {
-	local ns_output
-	ns_output=$(nvme id-ns "$NS_DEV" 2>&1) || true
-	local flbas
-	flbas=$(echo "$ns_output" | grep "^flbas" | awk '{print $3}' || true)
-	if [ -z "$flbas" ]; then return; fi
-	local lbaf_idx=$(( flbas & 0xF ))
-	local lbads
-	lbads=$(echo "$ns_output" | grep "lbads.*:.*[0-9]" | sed -n "$((lbaf_idx + 1))p" | grep -oP 'lbads\s*:\s*\K[0-9]+' || true)
-	if [ -n "$lbads" ] && [ "$((lbads))" -gt 0 ]; then
-		BLOCK_SIZE=$((1 << lbads))
-	fi
+	BLOCK_SIZE=$(detect_lba_block_size "$NS_DEV")
 }
 
 # --------------------------------------------------------------------------

@@ -420,6 +420,28 @@ verify_feature() {
 }
 
 # --------------------------------------------------------------------------
+# LBA block size detection
+# --------------------------------------------------------------------------
+
+detect_lba_block_size() {
+	local ns_dev="$1"
+	local ns_output
+	ns_output=$(nvme id-ns "$ns_dev" 2>/dev/null) || true
+	local flbas
+	flbas=$(echo "$ns_output" | grep "^flbas" | awk '{print $3}' || true)
+	if [ -z "$flbas" ]; then echo 512; return; fi
+	local lbaf_idx=$(( flbas & 0xF ))
+	local lbads
+	lbads=$(echo "$ns_output" | grep "lbads.*:.*[0-9]" \
+		| sed -n "$((lbaf_idx + 1))p" | grep -oP 'lbads\s*:\s*\K[0-9]+' || true)
+	if [ -n "$lbads" ] && [ "$((lbads))" -gt 0 ]; then
+		echo $((1 << lbads))
+	else
+		echo 512
+	fi
+}
+
+# --------------------------------------------------------------------------
 # Write / read / verify pattern (for behavioral validation)
 # --------------------------------------------------------------------------
 
@@ -427,7 +449,11 @@ write_read_verify() {
 	local ns_dev="$1"
 	local start_lba="${2:-0}"
 	local block_count="${3:-1}"
-	local block_size="${4:-512}"
+	local block_size="${4:-0}"
+
+	if [ "$block_size" -eq 0 ]; then
+		block_size=$(detect_lba_block_size "$ns_dev")
+	fi
 
 	local total_bytes=$((block_count * block_size))
 	local tmp_dir
