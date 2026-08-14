@@ -20,8 +20,10 @@ Tests are organized into four categories:
 - **Read-Only** (Suites 1-12): Never modify device state. Safe to run on any drive.
 - **Non-Destructive Functional** (Suites 13-16): May trigger events but do not erase data.
 - **Command Set Specific** (Suites 28-29): ZNS and KV namespace tests, auto-skip if not applicable.
-- **Destructive** (Suites 17-27): Modify device state (format, sanitize, reset, etc.).
-  Require ``--allow-destructive`` flag and refuse to run on the OS drive.
+- **Destructive** (Suites 17-22, 25-27): Modify device state (format, sanitize, I/O, etc.).
+  Require ``--destructive`` flag and refuse to run on the OS drive.
+- **Controller Reset** (Suites 23-24): Reset and firmware management tests that can cause the
+  controller to disappear from the PCI bus. Require ``--controller-reset`` flag (implies ``--destructive``).
 
 Result Codes
 ------------
@@ -84,11 +86,18 @@ Destructive Suites
    suite_20_sanitize
    suite_21_ns_mgmt
    suite_22_reservation
-   suite_23_reset
-   suite_24_fw_mgmt
    suite_25_additional_io
    suite_26_security_directives
    suite_27_advanced_admin
+
+Controller Reset Suites
+-----------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   suite_23_reset
+   suite_24_fw_mgmt
 
 Running the Tests
 -----------------
@@ -98,12 +107,16 @@ Running the Tests
    # Run read-only + non-destructive suites on a specific device
    sudo ./run_all.sh /dev/nvme0
 
-   # Run ALL suites including destructive tests
+   # Run destructive tests (format, sanitize, I/O — no resets)
    sudo ./run_all.sh /dev/nvme0 --destructive
+
+   # Include controller reset and firmware management suites
+   sudo ./run_all.sh /dev/nvme0 --controller-reset
 
    # Test all NVMe controllers (auto-skips OS drive)
    sudo ./run_all.sh --all
    sudo ./run_all.sh --all --destructive
+   sudo ./run_all.sh --all --controller-reset
 
    # Run a single suite
    sudo ./nvme_id_ctrl_test/nvme_id_ctrl_verify.sh /dev/nvme0
