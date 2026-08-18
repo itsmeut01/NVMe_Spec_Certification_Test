@@ -1126,7 +1126,7 @@ test_nn_cross_validate() {
 	local ns_count
 	ns_count=$(nvme list-ns "$ctrl_dev" --all 2>/dev/null | grep -c "^\[" || true)
 	if [ -z "$ns_count" ] || [ "$ns_count" -eq 0 ]; then
-		ns_count=$(nvme list-ns "$ctrl_dev" 2>/dev/null | wc -l || true)
+		ns_count=$(nvme list-ns "$ctrl_dev" 2>/dev/null | grep -c "^\[" || true)
 	fi
 	if [ "$ns_count" -le "$nn_int" ]; then
 		log_pass "Active namespaces (${ns_count}) <= NN (${nn_int})"

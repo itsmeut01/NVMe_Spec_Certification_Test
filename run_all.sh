@@ -24,6 +24,7 @@ RESET='\033[0m'
 
 DESTRUCTIVE_MODE=0
 ALL_DEVICES_MODE=0
+CONTROLLER_RESET_MODE=0
 
 TOTAL_SUITES=0
 PASSED_SUITES=0
@@ -54,9 +55,13 @@ OPTIONS
                         OS drives are auto-detected and skipped.
                         Cannot be combined with a specific device argument.
     --destructive       Also run destructive suites (17-27) that modify device
-                        state (format, sanitize, reset, set-feature, etc.).
+                        state (format, sanitize, set-feature, etc.).
                         Requires a non-OS NVMe device — the OS drive is always
                         refused regardless of this flag.
+    --controller-reset  Also run controller/subsystem reset and firmware
+                        management suites. These can cause the controller to
+                        disappear from the PCI bus and are NOT included in
+                        --destructive. Implies --destructive.
     -h, --help          Show this help message and exit.
 
 EXAMPLES
@@ -74,6 +79,9 @@ EXAMPLES
 
     # Test every NVMe controller with destructive suites
     sudo ./run_all.sh --all --destructive
+
+    # Include controller reset and firmware management suites
+    sudo ./run_all.sh /dev/nvme0 --controller-reset
 
     # Pass a namespace path (controller is resolved automatically)
     sudo ./run_all.sh /dev/nvme2n1 --destructive
@@ -101,6 +109,10 @@ for arg in "$@"; do
 			exit 0
 			;;
 		--destructive)
+			DESTRUCTIVE_MODE=1
+			;;
+		--controller-reset)
+			CONTROLLER_RESET_MODE=1
 			DESTRUCTIVE_MODE=1
 			;;
 		--all)
@@ -309,8 +321,10 @@ run_suites_for_device() {
 	if [ -n "$ns" ]; then
 		echo -e "  Namespace:   ${ns}"
 	fi
-	if [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
-		echo -e "  Mode:        ${RED}DESTRUCTIVE${RESET} (read-only + functional + destructive)"
+	if [ "$CONTROLLER_RESET_MODE" -eq 1 ]; then
+		echo -e "  Mode:        ${RED}DESTRUCTIVE + CONTROLLER RESET${RESET}"
+	elif [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
+		echo -e "  Mode:        ${RED}DESTRUCTIVE${RESET} (reset/fw-mgmt excluded — use --controller-reset)"
 	else
 		echo -e "  Mode:        Read-only + non-destructive functional"
 	fi
@@ -437,21 +451,30 @@ run_suites_for_device() {
 			run_suite "Reservation" \
 				"nvme_reservation_test/nvme_reservation_verify.sh" "$ctrl" --allow-destructive
 
-			run_suite "Reset" \
-				"nvme_reset_test/nvme_reset_verify.sh" "$ctrl" --allow-destructive
+			if [ "$CONTROLLER_RESET_MODE" -eq 1 ]; then
+				run_suite "Reset" \
+					"nvme_reset_test/nvme_reset_verify.sh" "$ctrl" --allow-destructive
 
-			run_suite "Firmware Management" \
-				"nvme_fw_mgmt_test/nvme_fw_mgmt_verify.sh" "$ctrl" --allow-destructive
+				run_suite "Firmware Management" \
+					"nvme_fw_mgmt_test/nvme_fw_mgmt_verify.sh" "$ctrl" --allow-destructive
 
-			if ! recover_device "$ctrl"; then
-				echo -e "  ${RED}SKIP${RESET}  Remaining suites — controller ${ctrl} unrecoverable after reset/fw-mgmt"
-				for _skip_name in "Additional I/O" "Security & Directives" "Advanced Admin"; do
-					TOTAL_SUITES=$((TOTAL_SUITES + 1))
-					FAILED_SUITES=$((FAILED_SUITES + 1))
-					SUITE_RESULTS+=("$(printf "  ${RED}FAIL${RESET}  Suite %d: %s (controller lost)" "$TOTAL_SUITES" "$_skip_name")")
-				done
+				if ! recover_device "$ctrl"; then
+					echo -e "  ${RED}SKIP${RESET}  Remaining suites — controller ${ctrl} unrecoverable after reset/fw-mgmt"
+					for _skip_name in "Additional I/O" "Security & Directives" "Advanced Admin"; do
+						TOTAL_SUITES=$((TOTAL_SUITES + 1))
+						FAILED_SUITES=$((FAILED_SUITES + 1))
+						SUITE_RESULTS+=("$(printf "  ${RED}FAIL${RESET}  Suite %d: %s (controller lost)" "$TOTAL_SUITES" "$_skip_name")")
+					done
+				else
+					ns=$(ls -1 "${ctrl}n"* 2>/dev/null | grep -E "^${ctrl}n[0-9]+$" | head -1 || true)
+				fi
 			else
-				ns=$(ls -1 "${ctrl}n"* 2>/dev/null | grep -E "^${ctrl}n[0-9]+$" | head -1 || true)
+				echo ""
+				echo -e "  ${YELLOW}SKIP${RESET}  Reset and Firmware Management suites (pass --controller-reset to run)"
+				TOTAL_SUITES=$((TOTAL_SUITES + 1))
+				SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: Reset (requires --controller-reset)" "$TOTAL_SUITES")")
+				TOTAL_SUITES=$((TOTAL_SUITES + 1))
+				SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: Firmware Management (requires --controller-reset)" "$TOTAL_SUITES")")
 			fi
 
 			if [ -e "$ctrl" ] && [ -n "$ns" ]; then
@@ -537,8 +560,10 @@ echo -e "  nvme-cli:    $(nvme version 2>/dev/null || echo 'unknown')"
 if [ "$ALL_DEVICES_MODE" -eq 1 ]; then
 	echo -e "  Scope:       ${CYAN}ALL NVMe drives${RESET} (OS drives auto-skipped)"
 fi
-if [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
-	echo -e "  Mode:        ${RED}DESTRUCTIVE${RESET}"
+if [ "$CONTROLLER_RESET_MODE" -eq 1 ]; then
+	echo -e "  Mode:        ${RED}DESTRUCTIVE + CONTROLLER RESET${RESET}"
+elif [ "$DESTRUCTIVE_MODE" -eq 1 ]; then
+	echo -e "  Mode:        ${RED}DESTRUCTIVE${RESET} (reset/fw-mgmt excluded)"
 else
 	echo -e "  Mode:        Read-only + non-destructive functional"
 fi

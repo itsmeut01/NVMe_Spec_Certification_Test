@@ -20,7 +20,7 @@ This project solves these problems with a comprehensive, open-source test framew
 Verifies that every mandatory and optional field returned by `nvme-cli` commands matches the NVMe Base Specification for the device's reported version. Checks presence, valid ranges, bit-field correctness, and cross-field consistency. These tests never modify device state. Includes extended log pages (telemetry lifecycle, persistent event log, endurance/reservation/boot-partition logs) and all Identify variants (list-ctrl, list-subsys, primary-ctrl-caps, NVM command-set IDs, domains, NVM sets, UUID, LBA formats).
 
 ### Functional / Behavioral Validation (Suites 13-14, 17-27)
-Goes beyond readback — actually exercises NVMe features and verifies that the device **behaves** as the spec requires. Every test that can follow the **save → change → action → verify behavior → restore** pattern does so. This includes set-feature cycling, I/O write+read+compare round-trips, firmware re-commit, directive enable/disable, lockdown lock/unlock, and telemetry generate/read cycles. Read-only tests are used only where no write counterpart exists (e.g., Identify structures). Destructive suites require an explicit `--destructive` flag and refuse to run on the OS drive.
+Goes beyond readback — actually exercises NVMe features and verifies that the device **behaves** as the spec requires. Every test that can follow the **save → change → action → verify behavior → restore** pattern does so. This includes set-feature cycling, I/O write+read+compare round-trips, firmware re-commit, directive enable/disable, lockdown lock/unlock, and telemetry generate/read cycles. Read-only tests are used only where no write counterpart exists (e.g., Identify structures). Destructive suites require an explicit `--destructive` flag and refuse to run on the OS drive. Controller reset and firmware management suites require an additional `--controller-reset` flag since these can cause the controller to disappear from the PCI bus.
 
 ## Features
 
@@ -28,7 +28,7 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 - **~456 individual tests** including presence checks, bit-field decoding, cross-validation, range checks, and behavioral verification
 - **Version-aware testing** — automatically gates checks on the device's reported NVMe version (1.0 through 2.4)
 - **Dynamic spec references** — maps the device's NVMe version to the correct spec revision, section, and figure
-- **Safe device infrastructure** — OS drive detection via `findmnt`, `lsblk`, and LVM symlink resolution; destructive tests always refuse the boot drive
+- **Safe device infrastructure** — OS drive detection via `findmnt`, `lsblk`, and LVM symlink resolution; destructive tests always refuse the boot drive; controller reset suites isolated behind `--controller-reset` with PCI bus recovery
 - **Behavioral validation** — set-feature tests verify actual behavior changes (I/O under different cache/power/arbitration settings), not just readback
 - **Save/restore pattern** — every feature modification saves the original value and restores it after testing
 - **Graceful degradation** — features unsupported by the controller produce SKIP, not false failures
@@ -75,11 +75,18 @@ Goes beyond readback — actually exercises NVMe features and verifies that the 
 | 20 | Sanitize | `nvme sanitize` | 5 | Block erase, poll progress (600s), verify result, overwrite sanitize, post-sanitize I/O |
 | 21 | Namespace Management | `nvme create-ns/delete-ns` | 6 | Create NS, attach, I/O on new NS, detach, delete, verify original NS unaffected |
 | 22 | Reservation | `nvme resv-register/acquire` | 5 | Register key, acquire exclusive, report reservations, release, post-release I/O |
-| 23 | Reset | `nvme reset` | 7 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, post-reset register state (CSTS.RDY/CFS, CC.EN), post-reset feature persistence (FID 0x07), post-reset SMART, subsystem reset |
-| 24 | Firmware Management | `nvme fw-log`, `nvme fw-commit` | 8 | Read slot info, re-commit active slot (safe no-op), verify unchanged, slot revisions, error cases (slot 0, no-download), fw-download /dev/zero |
 | 25 | Additional I/O | `nvme verify`, `nvme write-uncor`, `nvme copy`, `nvme io-passthru` | 11 | Verify command, write-uncor+recovery, copy round-trip, get-lba-status, io-passthru write+read, compare match/mismatch |
 | 26 | Security & Directives | `nvme security-recv`, `nvme dir-send/dir-receive` | 10 | Security recv safe probe (SPC-4 discovery), directives enable/disable Streams cycle, admin passthru round-trip |
 | 27 | Advanced Admin | `nvme lockdown`, `nvme io-mgmt-recv/send`, `nvme virt-mgmt` | 7 | Lockdown lock/unlock Keep Alive cycle, I/O management recv/send (FDP), virt-mgmt query, capacity-mgmt probe |
+
+### Controller Reset Suites (require `--controller-reset`)
+
+These suites can cause the controller to disappear from the PCI bus. They are excluded from `--destructive` and require a separate `--controller-reset` flag (which implies `--destructive`). The runner includes PCI bus rescan and namespace re-enumeration recovery between these suites and any subsequent tests.
+
+| # | Suite | Command | Tests | Description |
+|---|-------|---------|-------|-------------|
+| 23 | Reset | `nvme reset` | 7 | Controller reset + re-enumerate, post-reset identify (MN/SN match), post-reset I/O, post-reset register state (CSTS.RDY/CFS, CC.EN), post-reset feature persistence (FID 0x07), post-reset SMART, subsystem reset |
+| 24 | Firmware Management | `nvme fw-log`, `nvme fw-commit` | 8 | Read slot info, re-commit active slot (safe no-op), verify unchanged, slot revisions, error cases (slot 0, no-download), fw-download /dev/zero |
 
 ## Prerequisites
 
@@ -100,8 +107,11 @@ sudo apt install nvme-cli       # Debian/Ubuntu
 # Run read-only + non-destructive suites (suites 1-16)
 sudo ./run_all.sh /dev/nvme0
 
-# Run ALL suites including destructive tests (suites 1-27)
+# Run destructive tests (format, sanitize, I/O, set-feature — no resets)
 sudo ./run_all.sh /dev/nvme0 --destructive
+
+# Include controller reset and firmware management suites
+sudo ./run_all.sh /dev/nvme0 --controller-reset
 
 # Auto-detect first NVMe controller
 sudo ./run_all.sh
@@ -109,6 +119,7 @@ sudo ./run_all.sh
 # Test all NVMe controllers (auto-detects all drives, skips OS drive)
 sudo ./run_all.sh --all
 sudo ./run_all.sh --all --destructive
+sudo ./run_all.sh --all --controller-reset
 
 # Run a single suite
 sudo ./nvme_id_ctrl_test/nvme_id_ctrl_verify.sh /dev/nvme0
@@ -132,7 +143,7 @@ Detection uses `findmnt /`, `lsblk` mount-point scanning, and LVM symlink resolu
 
 ```
 NVMe_Spec_Certification_Test/
-├── run_all.sh                              # Master runner — 29 suites, --destructive, --all flags
+├── run_all.sh                              # Master runner — 29 suites, --destructive, --controller-reset, --all
 ├── common/
 │   └── nvme_test_lib.sh                    # Shared library (logging, version checks, spec refs,
 │                                           #   safe device checks, feature save/restore, write_read_verify)

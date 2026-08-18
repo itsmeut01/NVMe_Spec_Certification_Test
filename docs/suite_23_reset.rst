@@ -21,8 +21,9 @@ Prerequisites
 - Root privileges (``sudo``)
 - ``nvme-cli`` installed
 - NVMe device (e.g., ``/dev/nvme0``)
-- ``--allow-destructive`` flag required
+- ``--allow-destructive`` flag required (``--controller-reset`` in ``run_all.sh``)
 - Non-OS NVMe device (OS drive is always refused)
+- **Warning**: Controller/subsystem reset can cause the device to disappear from the PCI bus
 
 Test Steps
 ----------

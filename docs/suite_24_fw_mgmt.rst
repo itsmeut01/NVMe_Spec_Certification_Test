@@ -21,9 +21,10 @@ Prerequisites
 - Root privileges (``sudo``)
 - ``nvme-cli`` installed
 - NVMe device (e.g., ``/dev/nvme0``)
-- ``--allow-destructive`` flag required
+- ``--allow-destructive`` flag required (``--controller-reset`` in ``run_all.sh``)
 - Non-OS NVMe device (OS drive is always refused)
 - Controller must support firmware commands (OACS bit 2 = 1)
+- **Warning**: Firmware commit can trigger a controller reset and PCI bus re-enumeration
 
 Test Steps
 ----------
