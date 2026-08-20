@@ -231,7 +231,14 @@ test_multi_ns_io() {
 		return
 	fi
 
-	if write_read_verify "$ns2" 0 1 "$BLOCK_SIZE"; then
+	local ns2_csi
+	ns2_csi=$(nvme ns-descs "$ns2" 2>/dev/null | grep -i "^csi" | awk -F: '{print $2}' | tr -d ' ' || true)
+	if [ -n "$ns2_csi" ] && [ "$((ns2_csi))" -ne 0 ]; then
+		log_skip "Multi-namespace I/O" "${ns2} uses non-NVM command set (CSI=$((ns2_csi)))"
+		return
+	fi
+
+	if write_read_verify "$ns2" 0 1 0; then
 		log_pass "Multi-namespace I/O: write+read on ${ns2} succeeded"
 	else
 		log_fail "Multi-namespace I/O" "data mismatch on ${ns2}"
