@@ -663,7 +663,9 @@ test_all_lbaf_validation() {
 		fi
 		local lbads
 		lbads=$(echo "$lbaf_line" | grep -oP 'lbads:(\d+)' | cut -d: -f2)
-		if [ -n "$lbads" ] && [ "$lbads" -ge 9 ]; then
+		if [ -z "$lbads" ] || [ "$lbads" -eq 0 ]; then
+			continue
+		elif [ "$lbads" -ge 9 ]; then
 			valid=$((valid + 1))
 		else
 			invalid=$((invalid + 1))

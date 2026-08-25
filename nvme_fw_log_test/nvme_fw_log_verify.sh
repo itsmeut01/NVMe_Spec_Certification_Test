@@ -25,7 +25,9 @@ fw_get_field() {
 }
 
 fw_field_present() {
-	echo "$FW_LOG" | grep -q "^$1 "
+	local val
+	val=$(echo "$FW_LOG" | grep "^$1[[:space:]]" | awk -F': ' '{ print $2 }' | awk '{ print $1 }' || true)
+	[ -n "$val" ] && [ "$val" != "0x0000000000000000" ] && [ "$val" != "0x3030303030303030" ]
 }
 
 # --------------------------------------------------------------------------

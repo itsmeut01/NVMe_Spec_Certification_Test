@@ -405,21 +405,58 @@ run_suites_for_device() {
 	if [ -n "$ns" ]; then
 		run_suite "Additional Identify" \
 			"nvme_additional_id_test/nvme_additional_id_verify.sh" "$ns"
-
-		run_suite "ZNS Command Set" \
-			"nvme_zns_test/nvme_zns_verify.sh" "$ns"
-
-		run_suite "KV Command Set" \
-			"nvme_kv_test/nvme_kv_verify.sh" "$ns"
 	else
 		echo ""
 		echo -e "  ${YELLOW}SKIP${RESET}  Suite: Additional Identify — no namespace device found for ${ctrl}"
 		TOTAL_SUITES=$((TOTAL_SUITES + 1))
 		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: Additional Identify — no namespace device" "$TOTAL_SUITES")")
-		TOTAL_SUITES=$((TOTAL_SUITES + 1))
-		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: ZNS Command Set — no namespace device" "$TOTAL_SUITES")")
-		TOTAL_SUITES=$((TOTAL_SUITES + 1))
-		SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: KV Command Set — no namespace device" "$TOTAL_SUITES")")
+	fi
+
+	# ------------------------------------------------------------------
+	# Command Set Specific — scan all namespaces for ZNS/KV
+	# ------------------------------------------------------------------
+
+	local all_ns zns_found=0 kv_found=0
+	all_ns=$(ls -1 "${ctrl}n"* 2>/dev/null | grep -E "^${ctrl}n[0-9]+$" || true)
+
+	if [ -n "$all_ns" ]; then
+		local ns_dev ns_csi
+		for ns_dev in $all_ns; do
+			ns_csi=$(nvme ns-descs "$ns_dev" 2>/dev/null | grep -i "^csi" | awk -F: '{print $2}' | tr -d ' ' || true)
+			if [ -n "$ns_csi" ] && [ "$((ns_csi))" -eq 2 ]; then
+				zns_found=1
+				echo ""
+				echo -e "  ${CYAN}ZNS namespace detected: ${ns_dev} (CSI=2)${RESET}"
+				run_suite "ZNS Command Set (${ns_dev})" \
+					"nvme_zns_test/nvme_zns_verify.sh" "$ns_dev"
+			elif [ -n "$ns_csi" ] && [ "$((ns_csi))" -eq 3 ]; then
+				kv_found=1
+				echo ""
+				echo -e "  ${CYAN}KV namespace detected: ${ns_dev} (CSI=3)${RESET}"
+				run_suite "KV Command Set (${ns_dev})" \
+					"nvme_kv_test/nvme_kv_verify.sh" "$ns_dev"
+			fi
+		done
+	fi
+
+	if [ "$zns_found" -eq 0 ]; then
+		if [ -n "$ns" ]; then
+			run_suite "ZNS Command Set" \
+				"nvme_zns_test/nvme_zns_verify.sh" "$ns"
+		else
+			TOTAL_SUITES=$((TOTAL_SUITES + 1))
+			SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: ZNS Command Set — no namespace device" "$TOTAL_SUITES")")
+		fi
+	fi
+
+	if [ "$kv_found" -eq 0 ]; then
+		if [ -n "$ns" ]; then
+			run_suite "KV Command Set" \
+				"nvme_kv_test/nvme_kv_verify.sh" "$ns"
+		else
+			TOTAL_SUITES=$((TOTAL_SUITES + 1))
+			SUITE_RESULTS+=("$(printf "  ${YELLOW}SKIP${RESET}  Suite %d: KV Command Set — no namespace device" "$TOTAL_SUITES")")
+		fi
 	fi
 
 	# ------------------------------------------------------------------

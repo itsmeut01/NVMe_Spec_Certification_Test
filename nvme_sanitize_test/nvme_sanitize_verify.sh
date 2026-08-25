@@ -268,14 +268,7 @@ test_io_post_sanitize() {
 		return
 	fi
 
-	local bs=512
-	local lbads
-	lbads=$(echo "$ns_check" | grep "lbads" | head -1 | grep -oP 'lbads\s*:\s*\K[0-9]+' || true)
-	if [ -n "$lbads" ] && [ "$((lbads))" -gt 0 ]; then
-		bs=$((1 << lbads))
-	fi
-
-	if write_read_verify "$NS_DEV" 0 1 "$bs"; then
+	if write_read_verify "$NS_DEV" 0 1 0; then
 		log_pass "I/O post-sanitize: write+read succeeded on ${NS_DEV}"
 	else
 		log_fail "I/O post-sanitize" "write+read data mismatch"

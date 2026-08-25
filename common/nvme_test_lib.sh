@@ -374,7 +374,7 @@ save_feature() {
 	local fid="$1"
 	local ctrl_dev="$2"
 	local output
-	output=$(nvme get-feature "$ctrl_dev" -f "$fid" 2>&1) || true
+	output=$(nvme get-feature "$ctrl_dev" -f "$fid" -n 0 2>&1) || true
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -n "$result" ]; then
@@ -393,7 +393,7 @@ restore_feature() {
 		return 0
 	fi
 	local val=$((saved))
-	nvme set-feature "$ctrl_dev" -f "$fid" -V "$val" 2>&1 || true
+	nvme set-feature "$ctrl_dev" -f "$fid" -V "$val" -n 0 2>&1 </dev/null || true
 	unset '_SAVED_FEATURES[$fid]'
 }
 
@@ -402,7 +402,7 @@ set_feature() {
 	local value="$2"
 	local ctrl_dev="$3"
 	local output
-	output=$(nvme set-feature "$ctrl_dev" -f "$fid" -V "$value" 2>&1) || true
+	output=$(nvme set-feature "$ctrl_dev" -f "$fid" -V "$value" -n 0 2>&1 </dev/null) || true
 	echo "$output"
 }
 
@@ -411,7 +411,7 @@ verify_feature() {
 	local expected="$2"
 	local ctrl_dev="$3"
 	local output
-	output=$(nvme get-feature "$ctrl_dev" -f "$fid" 2>&1) || true
+	output=$(nvme get-feature "$ctrl_dev" -f "$fid" -n 0 2>&1) || true
 	local result
 	result=$(extract_feature_result "$output")
 	if [ -z "$result" ]; then
