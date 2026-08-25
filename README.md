@@ -293,7 +293,3 @@ All source files include the SPDX header: `SPDX-License-Identifier: GPL-3.0+`
 ## Author
 
 **Utkarsh Singh** (utsingh@redhat.com)
-
-## Tool
-
-Built with [Claude Code](https://claude.ai/code) (Claude Opus 4.6) by Anthropic.

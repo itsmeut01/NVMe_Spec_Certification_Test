@@ -6,3 +6,4 @@ logs/
 
 # Claude Code session data
 .claude/
+test_results/
