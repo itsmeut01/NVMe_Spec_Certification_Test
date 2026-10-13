@@ -308,12 +308,14 @@ Test Steps
       :Pass: MDTS = 0 (no limit) or computed size >= 128 KiB
       :Fail: computed max transfer < 128 KiB
 
-   e. **test_wctemp_cctemp_cross** -- Verify CCTEMP > WCTEMP and both are within 273K-500K.
+   e. **test_wctemp_cctemp_cross** -- Verify the CCTEMP/WCTEMP relationship and that both are within 273K-500K.
+      The specification only requires both thresholds to be non-zero (revision 1.2+); it does not mandate
+      CCTEMP > WCTEMP. Equal thresholds are legal but leave an empty warning window.
 
       :Pass: CCTEMP > WCTEMP
-      :Fail: CCTEMP <= WCTEMP
+      :Fail: CCTEMP < WCTEMP -- critical threshold trips before warning
       :Skip: one or both thresholds are zero or unavailable
-      :Warn: temperature outside 273K-500K typical range
+      :Warn: CCTEMP equals WCTEMP, or temperature outside 273K-500K typical range
 
    f. **test_hctma_thermal** -- If HCTMA is supported, verify MNTMT < MXTMT.
 

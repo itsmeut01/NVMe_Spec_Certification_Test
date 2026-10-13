@@ -957,10 +957,16 @@ test_wctemp_cctemp_cross() {
 		log_skip "CCTEMP > WCTEMP cross-validation" "one or both thresholds are 0"
 		return
 	fi
+	# The spec only requires both thresholds to be non-zero (1.2+); it never
+	# mandates CCTEMP > WCTEMP. Equal values are legal but leave an empty
+	# warning window; CCTEMP below WCTEMP means critical trips before warning,
+	# which no controller can have intended.
 	if [ "$cc_int" -gt "$wc_int" ]; then
 		log_pass "CCTEMP (${cc_int}K) > WCTEMP (${wc_int}K)"
+	elif [ "$cc_int" -eq "$wc_int" ]; then
+		log_warn "CCTEMP equals WCTEMP" "CCTEMP=${cc_int}K, WCTEMP=${wc_int}K — warning temperature window is empty"
 	else
-		log_fail "CCTEMP must be > WCTEMP" "CCTEMP=${cc_int}K, WCTEMP=${wc_int}K"
+		log_fail "CCTEMP must not be below WCTEMP" "CCTEMP=${cc_int}K < WCTEMP=${wc_int}K — critical threshold trips before warning"
 	fi
 	if [ "$wc_int" -lt 273 ] || [ "$wc_int" -gt 500 ]; then
 		log_warn "WCTEMP outside typical range" "WCTEMP=${wc_int}K not in 273K-500K"
