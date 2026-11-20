@@ -51,11 +51,13 @@ Test Steps
 
 3. **PS 0 (Default) Validation**
 
-   a. **test_ps0_max_power** -- Verify that Power State 0 reports a non-zero
-      maximum power (mp) value.
+   a. **test_ps0_max_power** -- Verify that Power State 0 reports a maximum
+      power (mp) value. A value of 0h is spec-permitted and means Maximum
+      Power is not reported.
 
       :Pass: PS 0 ``mp`` field is non-zero
-      :Fail: PS 0 ``mp`` is zero or missing
+      :Fail: PS 0 descriptor missing, or ``mp`` field could not be parsed
+      :Skip: PS 0 ``mp`` is 0h -- Maximum Power not reported
 
    b. **test_ps0_operational** -- Verify that Power State 0 is marked as
       operational (NOPS=0, no ``non-operational`` flag).

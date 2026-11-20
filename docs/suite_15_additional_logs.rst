@@ -48,8 +48,8 @@ Test Steps
    b. **test_telemetry_verify_header** -- verify the telemetry header Log Page Identifier (LPI) byte.
 
       :Command: ``od`` on first byte of generated telemetry binary file
-      :Pass: LPI is 0x08 (Host-Initiated Telemetry)
-      :Warn: LPI is not 0x08, or file is smaller than 512 bytes
+      :Pass: LPI is 0x07 (Host-Initiated Telemetry)
+      :Warn: LPI is not 0x07, or file is smaller than 512 bytes
       :Skip: requires NVMe 1.3+, or no telemetry data was generated
 
    c. **test_telemetry_read_existing** -- re-read existing telemetry context without generating a new snapshot.
@@ -64,6 +64,13 @@ Test Steps
       :Command: ``nvme telemetry-log /dev/nvmeX -O <tmpfile> -c -d 1``
       :Pass: telemetry binary file created and non-empty, or command completed
       :Skip: requires NVMe 1.3+, or controller returns not-supported/error
+
+   e. **test_telemetry_ctrl_verify_header** -- verify the controller-initiated telemetry header LPI byte.
+
+      :Command: ``od`` on first byte of controller-initiated telemetry binary file
+      :Pass: LPI is 0x08 (Controller-Initiated Telemetry)
+      :Warn: LPI is not 0x08, or file is smaller than 512 bytes
+      :Skip: requires NVMe 1.3+, or no controller-initiated telemetry data
 
 3. **Persistent Event Log (Behavioral: establish -> read -> release)**
 

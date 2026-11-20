@@ -75,10 +75,10 @@ test_telemetry_verify_header() {
 	if [ "$file_size" -ge 512 ]; then
 		local lpi
 		lpi=$(od -A n -t x1 -j 0 -N 1 "$telem_file" 2>/dev/null | tr -d ' ' || true)
-		if [ "$lpi" = "08" ]; then
-			log_pass "Telemetry: header LPI=0x08 (Host-Initiated Telemetry log)"
+		if [ "$lpi" = "07" ]; then
+			log_pass "Telemetry: header LPI=0x07 (Host-Initiated Telemetry log)"
 		else
-			log_warn "Telemetry: header LPI" "expected 0x08, got 0x${lpi}"
+			log_warn "Telemetry: header LPI" "expected 0x07, got 0x${lpi}"
 		fi
 	else
 		log_warn "Telemetry: verify header" "file too small (${file_size} bytes < 512)"
@@ -127,6 +127,34 @@ test_telemetry_controller_initiated() {
 		log_skip "Telemetry: controller-initiated" "$(echo "$output" | head -1)"
 	else
 		log_pass "Telemetry: controller-initiated command completed"
+	fi
+}
+
+test_telemetry_ctrl_verify_header() {
+	if ! ver_at_least 1 3; then
+		log_skip "Telemetry: verify controller-initiated header" "requires NVMe 1.3+"
+		return
+	fi
+
+	local telem_file="${TMP_DIR}/telemetry_ctrl.bin"
+	if [ ! -f "$telem_file" ] || [ ! -s "$telem_file" ]; then
+		log_skip "Telemetry: verify controller-initiated header" "no controller-initiated telemetry data"
+		return
+	fi
+
+	local file_size
+	file_size=$(stat -c%s "$telem_file" 2>/dev/null || echo 0)
+	if [ "$file_size" -lt 512 ]; then
+		log_warn "Telemetry: verify controller-initiated header" "file too small (${file_size} bytes < 512)"
+		return
+	fi
+
+	local lpi
+	lpi=$(od -A n -t x1 -j 0 -N 1 "$telem_file" 2>/dev/null | tr -d ' ' || true)
+	if [ "$lpi" = "08" ]; then
+		log_pass "Telemetry: header LPI=0x08 (Controller-Initiated Telemetry log)"
+	else
+		log_warn "Telemetry: controller-initiated header LPI" "expected 0x08, got 0x${lpi}"
 	fi
 }
 
@@ -538,6 +566,7 @@ main() {
 	test_telemetry_verify_header
 	test_telemetry_read_existing
 	test_telemetry_controller_initiated
+	test_telemetry_ctrl_verify_header
 
 	echo ""
 	echo -e "${BOLD}--- Persistent Event Log (Behavioral: establish -> read -> release) ---${RESET}"

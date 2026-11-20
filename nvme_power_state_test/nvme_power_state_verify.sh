@@ -93,10 +93,16 @@ test_ps0_max_power() {
 	fi
 	local mp
 	mp=$(extract_ps_field "$ps0" "mp")
-	if [ -n "$mp" ] && [ "$mp" != "0" ] && [ "$mp" != "0.00W" ] && [ "$mp" != "0.0000W" ]; then
+	if [ -z "$mp" ]; then
+		log_fail "PS 0 max_power (mp) could not be parsed" "no mp field in '${ps0}'"
+		return
+	fi
+	# MP=0h is spec-permitted and means "Maximum Power is not reported" —
+	# common on fabrics targets that have no meaningful power draw.
+	if [ "$mp" != "0" ] && [ "$mp" != "0.00W" ] && [ "$mp" != "0.0000W" ]; then
 		log_pass "PS 0 max_power (mp) is non-zero (${mp})"
 	else
-		log_fail "PS 0 max_power (mp) must be non-zero" "got '${mp}'"
+		log_skip "PS 0 max_power (mp) is reported" "MP=0h — Maximum Power not reported"
 	fi
 }
 
